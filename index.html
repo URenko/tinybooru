@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/awesomplete/awesomplete.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/awesomplete/awesomplete.min.js" async></script>
+    <meta name="referrer" content="same-origin" />
+</head>
+<body>
+    <form action="" method="get" class="form-example">
+        <select id="order" name="order" onchange="this.form.submit()">
+            <option value="desc">New → Old</option>
+            <option value="random">🎲</option>
+            <option value="asc" selected>Old → New</option>
+        </select>
+        <input type="text" name="q" id="q" class="awesomplete" />
+        <input type="submit" hidden />
+    </form>
+    <div id="grid" style="display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); grid-template-rows: masonry;"></div>
+    <script>
+        window.page = 0;
+        const params = new URLSearchParams(location.search);
+        document.getElementById("q").value = params.get('q');
+        document.getElementById("order").value = params.has('order') ? params.get('order') : 'desc';
+        let load = function(){
+            params.set('page', window.page);
+            fetch(`api/list?${params.toString()}`).then(
+                res => res.json().then(j => {
+                    let grid = document.getElementById('grid');
+                    j.forEach(item => {
+                        let figure = document.createElement('figure');
+                        figure.id = item.source;
+                        figure.style = "margin: 0;"
+                        let img = document.createElement('img');
+                        img.loading = 'lazy';
+                        img.style = "max-width: 100%; max-height: 100%; display: block;";
+                        img.src = item.thumbnail;
+                        img.onclick= e => location.href = 'original?'+item.local;
+                        let figcaption = document.createElement('figcaption');
+                        figcaption.innerHTML = '<p style="text-align:center">' + item.title + '</p>' + item.caption + '<br/>🏷️ ' + item.tags.split(', ').map(tag => `<a href="?q=${tag}">${tag}</a>`).join(', ');
+                        figure.append(img);
+                        figure.append(figcaption);
+                        grid.appendChild(figure);
+                    })
+                })
+            )
+        };
+        window.onscroll= function(){
+            var scrollHeight = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
+            var scrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop;
+            var clientHeight = window.innerHeight || Math.min(document.documentElement.clientHeight,document.body.clientHeight);
+            
+            if (clientHeight + scrollTop > scrollHeight - 50){
+                window.page += 1;
+                load();
+            }
+        }
+        load();
+
+        fetch("tags.json")
+            .then((response) => response.json())
+            .then(function(data) {
+                let input = document.getElementById("q");
+                new Awesomplete(input, {
+                    list: data,
+                    maxItems: 64,
+                    filter(text, input) {
+                        let input_tag = input.match(/[^, -]*$/)[0];
+                        return Awesomplete.FILTER_CONTAINS(text, input_tag);
+                    },
+                    replace(text) {
+                        const before = this.input.value.match(/^.*(,|-)\s*-*|/)[0];
+                        this.input.value = `${before + text}, `;
+                    },
+                });
+            });
+
+    </script>
+</body>
+</html>

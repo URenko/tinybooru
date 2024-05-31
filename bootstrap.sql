@@ -1,0 +1,1 @@
+CREATE TABLE pixiv(source PRIMARY KEY, `from`, source_url, local, title, caption, tags, thumbnail TEXT)

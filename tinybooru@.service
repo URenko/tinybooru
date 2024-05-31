@@ -1,0 +1,14 @@
+[Unit]
+Wants=network-online.target
+After=local-fs.target network-online.target nss-lookup.target remote-fs.target
+
+[Service]
+Type=exec
+PrivateTmp=false
+WorkingDirectory=/home/%i/tinybooru
+ExecStart=python3 -m uvicorn tinybooru:app --uds /tmp/tinybooru.sock
+User=%i
+IPAccounting=true
+
+[Install]
+WantedBy=default.target

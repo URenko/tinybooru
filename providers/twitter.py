@@ -1,4 +1,4 @@
-import io, time, pickle, http, json, re, lzma, fcntl, tempfile, subprocess
+import io, time, pickle, http, json, re, lzma, fcntl, tempfile, subprocess, os
 from typing import Callable
 from pathlib import Path, PurePosixPath
 from io import BytesIO
@@ -13,6 +13,7 @@ import img_like
 from rich import print
 from rich import print as pprint
 from rich.console import Console
+from rich.prompt import Confirm
 console = Console()
 
 import urllib3
@@ -26,6 +27,11 @@ s.mount('https://', HTTPAdapter(max_retries=retries))
 # s.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; rv:125.0) Gecko/20100101 Firefox/125.0"})
 import cloudscraper
 scraper = cloudscraper.create_scraper()
+scraper.mount('http://', HTTPAdapter(max_retries=retries))
+scraper.mount('https://', HTTPAdapter(max_retries=retries))
+
+ascii2d_prefix = os.environ.get('ascii2d_prefix', 'https://ascii2d.net')
+ascii2d_host = os.environ.get('ascii2d_host', 'https://ascii2d.net')
 
 from config import ffmpeg
 from utils import image_verify, get_metadata, url2source
@@ -73,13 +79,9 @@ def process_search_results(
     max_similarity = max(map(lambda search_result: search_result.similarity, search_results))
     if max_similarity >= threshold:
         print(f"发现相似图片，相似度 {'[red]' if max_similarity >= 0.9 else ''}{max_similarity:.2%}{'[/red]' if max_similarity >= 0.9 else ''}，见 {display_url}")
-        while True:
-            match console.input('[green]忽略识图并接受原图(I/c)[/green] / [red]抛弃原图并手动收藏识图(R/b)[/red]: '):
-                case 'I' | 'c':
-                    break  # break 此处局部的 while
-                case 'R' | 'b': # 因相似图片抛弃该原图
-                    checkpoint.add(metadata['source'])
-                    return False
+        if Confirm.ask('找到了? 抛弃原图并手动收藏识图'):
+            checkpoint.add(metadata['source'])
+            return False
     pre_tags = metadata['tags'].split(', ')
     normal_tags = []
     # 反向优先级解析以覆盖 normal_tags
@@ -102,7 +104,7 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
         checkpoint = set()
     
     try:
-        for item in json.loads(json_path.read_bytes()):
+        for item in reversed(json.loads(json_path.read_bytes())):
             if break_flag: break
             source = 'https://twitter.com/i/status/' + item['id']
             print('\n--->', source)
@@ -158,18 +160,26 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                         continue
                     
                     r = s.get(metadata['source_url'], timeout=300)
+                    if r.status_code == http.HTTPStatus.NOT_FOUND:
+                        print('该图已被删除')
+                        continue
                     r.raise_for_status()
                     image_verify(r.content)
 
                     if search:
                         # 识图
                         search_url = metadata['source_url']
+                        # TODO: 手动模式
+                        # print(f'https://ascii2d.net/search/url/{search_url}')
+                        # if Confirm.ask('找到了? 抛弃原图并手动收藏识图'):
+                        #     checkpoint.add(metadata['source'])
+                        #     continue
 
                         ## 识图 ascii2d
                         raw_request = s.get(source_url)
                         image_verify(raw_request.content)
                         for _ in range(3):
-                            _r = scraper.get(f'https://ascii2d.net/search/url/{search_url}', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; rv:125.0) Gecko/20100101 Firefox/125.0'})
+                            _r = scraper.get(f'{ascii2d_prefix}/search/url/{search_url}', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; rv:125.0) Gecko/20100101 Firefox/125.0'})
                             try:
                                 _r.raise_for_status()
                             except Exception:
@@ -187,8 +197,8 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                         search_identities = []
                         for item_box in item_boxes[1:]:
                             assert item_box.div.img['loading'] == 'lazy', item_box
-                            thumb_request = scraper.get("https://ascii2d.net"+item_box.div.img['src'])
-                            if thumb_request.status_code == http.HTTPStatus.NOT_FOUND:
+                            thumb_request = scraper.get(ascii2d_host+item_box.div.img['src'])
+                            if thumb_request.status_code == http.HTTPStatus.NOT_FOUND or ascii2d_host == thumb_request.url:
                                 similarity = 0
                             elif len(thumb_request.content) == 0:
                                 similarity = 0
@@ -216,7 +226,7 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                             continue
 
                         ## ascii2d: 特徴検索
-                        next_ascii2d_url = "https://ascii2d.net" + soup.find("a", string="特徴検索")["href"]
+                        next_ascii2d_url = ascii2d_host + soup.find("a", string="特徴検索")["href"]
                         _r = scraper.get(next_ascii2d_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; rv:125.0) Gecko/20100101 Firefox/125.0'})
                         _r.raise_for_status()
                         soup = BeautifulSoup(_r.text, 'html.parser')
@@ -226,8 +236,8 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                         search_identities = []
                         for item_box in item_boxes[1:]:
                             assert item_box.div.img['loading'] == 'lazy'
-                            thumb_request = scraper.get("https://ascii2d.net"+item_box.div.img['src'])
-                            if thumb_request.status_code == http.HTTPStatus.NOT_FOUND:
+                            thumb_request = scraper.get(ascii2d_host+item_box.div.img['src'])
+                            if thumb_request.status_code == http.HTTPStatus.NOT_FOUND or ascii2d_host == thumb_request.url:
                                 similarity = 0
                             else:
                                 image_verify(thumb_request.content)
@@ -321,7 +331,7 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
             json_path.unlink()
         break_flag = True # 正常结束，跳过下面的保存询问
     finally:
-        if break_flag or input("保存 checkpoint? [y/N] ").lower() == 'y':
+        if break_flag or Confirm.ask("保存 checkpoint?"):
             with open(checkpoint_path, 'wb') as f:
                 pickle.dump(checkpoint, f, protocol=5)
                 fcntl.lockf(f, fcntl.LOCK_UN)

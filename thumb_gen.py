@@ -78,7 +78,7 @@ def update_thumb(source: str, db: sqlite3.Connection, target_size=5*2**20):
             Image.open(r.raw).verify()
             print('✅\n')
             break
-        except UnidentifiedImageError:
+        except (UnidentifiedImageError, urllib3.exceptions.ProtocolError): # This includes IncompleteRead.
             pass
         print('.', end='')
         time.sleep(6)

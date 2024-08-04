@@ -3,7 +3,7 @@
 import functools
 from io import BytesIO
 import json, sqlite3, re, argparse, os, tempfile, subprocess, filecmp, http, shutil
-from pathlib import Path
+from pathlib import Path, PurePath
 from pprint import pprint
 from urllib.parse import unquote
 from html import unescape
@@ -59,6 +59,10 @@ def pull_picture(source: str, from_: str=None):
 
     if 'i.pximg.net' in metadata['source_url']:
         metadata['local'] = source_id + Path(os.path.basename(metadata['source_url'])).suffix
+        if '_p' in source_id:
+            pixiv_num = source_id.partition('_p')[0]
+            assert pixiv_num.isdigit()
+            metadata['local'] = pixiv_num + '/' + metadata['local']
         r = s.get(metadata['source_url'].replace('i.pximg.net', 'o.acgpic.net'), headers={"Referer": "https://pixivic.com/illusts/114514?VNK=da32baf"}, timeout=300)
     else:
         metadata['local'] = unquote(os.path.basename(metadata['source_url']))
@@ -77,8 +81,9 @@ def store_image(image_data: bytes, metadata: dict):
     
     image_verify(image_data)
     fpath = local_root / metadata['local']
+    fpath.parent.mkdir(exist_ok=True)
     fpath.write_bytes(image_data)
-    metadata['local'] = jxl(fpath).name
+    metadata['local'] = PurePath(metadata['local']).with_name(jxl(fpath).name).as_posix()
     pprint(metadata)
 
     db.execute(

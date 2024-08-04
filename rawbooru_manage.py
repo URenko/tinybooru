@@ -14,10 +14,11 @@ from providers.twitter import twitter_generator
 
 def exists(metadata: dict) -> bool:
     fpath = Path(local_root / metadata['local'])
-    return jxl_exists(fpath)
+    return jxl_exists(fpath) or jxl_exists(local_root / fpath.name)
 
 for image_data, metadata in twitter_generator(p, exists, search=False):
     fpath = Path(local_root / metadata['local'])
+    fpath.parent.mkdir(exist_ok=True)
     if isinstance(image_data, bytes):
         fpath.write_bytes(image_data)
     elif callable(image_data):

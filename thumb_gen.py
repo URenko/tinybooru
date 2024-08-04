@@ -4,7 +4,7 @@ install()
 from rich import print
 
 import sqlite3, io, http, time, tempfile, subprocess
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import quote_plus
 from PIL import Image, UnidentifiedImageError
 import urllib3
@@ -26,12 +26,12 @@ def update_thumb(source: str, db: sqlite3.Connection, target_size=5*2**20):
     local, = db.execute('SELECT local FROM pixiv WHERE source = ?', (source,)).fetchone()
 
     origin_path = local_root / local
-    origin_name = local
+    origin_name = PurePosixPath(local).name
     if origin_path.suffix.lower() == '.jxl':
         _jpg_tmp_file = tempfile.NamedTemporaryFile(suffix='.jpg')
         subprocess.run(["djxl", str(origin_path), _jpg_tmp_file.name], check=True)
         origin_path = Path(_jpg_tmp_file.name)
-        origin_name = str(Path(local).with_suffix('.jpg'))
+        origin_name = str(Path(local).with_suffix('.jpg').name)
         _jxl = True
     else:
         _jxl = False

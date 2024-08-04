@@ -120,6 +120,7 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                         "source": f"twitter:{item['id']}@{index+1}",
                         'local': video_path.name,
                     }
+                    if len(item['media']) > 1: metadata['local'] = item['id'] + '/' + metadata['local']
                     if exists(metadata):
                         checkpoint.add(metadata['source'])
                         continue
@@ -153,6 +154,7 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                         "caption": item['full_text'],
                         "tags": "©:"+artist,
                     }
+                    if len(item['media']) > 1: metadata['local'] = item['id'] + '/' + metadata['local']
                     if metadata['source'] in checkpoint:
                         continue
                     if exists(metadata):

@@ -6,7 +6,6 @@ from pprint import pprint
 from urllib.parse import unquote
 from html import unescape
 from PIL import Image, UnidentifiedImageError
-
 from rich.traceback import install
 install()
 from rich import print
@@ -36,18 +35,6 @@ def image_verify(img_content):
     return image
     # if image.format.lower() == 'jpeg':  # 有些JPG尾部有额外字节，如 https://yande.re/post/show/107805 ，libjxl会确保JPG的正确
     #     if not img_content.rstrip(b'\0\r\n').endswith(b'\xff\xd9'): raise NotImplementedError('未知的JPEG格式')
-
-
-def jxl(fpath: Path, check_format=False):
-    if fpath.suffix == '.jpg' and (not check_format or Image.open(fpath).format == 'JPEG'):
-        jxl_path = fpath.with_suffix('.jxl')
-        subprocess.run(["cjxl", str(fpath), str(jxl_path), '--lossless_jpeg', '1', '-e', '9', '--brotli_effort', '11'], check=True)
-        with tempfile.NamedTemporaryFile(suffix='.jpg') as tmp:
-            subprocess.run(["djxl", str(jxl_path), tmp.name], check=True)
-            assert filecmp.cmp(str(fpath), tmp.name)
-        fpath.unlink()
-        return jxl_path
-    return fpath
 
 @functools.cache
 def cached_pixiv_illust_detail(illust_id):

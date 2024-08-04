@@ -13,8 +13,9 @@ from rich.traceback import install
 install()
 from rich import print
 
+from jxl import jxl
 from thumb_gen import update_thumb
-from utils import image_verify, jxl, get_metadata, url2source
+from utils import image_verify, get_metadata, url2source
 
 from config import local_root, sqlite3_path
 local_root = local_root / 'pixiv'

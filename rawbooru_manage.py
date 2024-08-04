@@ -3,6 +3,8 @@ import sys
 from pathlib import Path
 p = Path(sys.argv[1])
 
+from jxl import jxl_exists
+
 from config import local_root
 
 local_root = local_root / input("保存到子目录: ")
@@ -12,7 +14,7 @@ from providers.twitter import twitter_generator
 
 def exists(metadata: dict) -> bool:
     fpath = Path(local_root / metadata['local'])
-    return fpath.exists() or (fpath.suffix == '.jpg' and fpath.with_suffix('.jxl').exists())
+    return jxl_exists(fpath)
 
 for image_data, metadata in twitter_generator(p, exists, search=False):
     fpath = Path(local_root / metadata['local'])

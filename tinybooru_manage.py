@@ -136,6 +136,7 @@ if __name__ == '__main__':
             "caption": None,
             "tags": '',
         })
+        db.commit()
     elif args.pixiv:
         from providers.pixiv import Papi
         next_qs = {'user_id': Papi.user_id}
@@ -148,8 +149,13 @@ if __name__ == '__main__':
                     if bool(illust['meta_pages']): source += '_p0'
                     pull_picture(source)
                     db.commit()
-            break # TODO
-            next_qs = AppPixivAPI.parse_qs(json_result.next_url)
+                    final_skip = False
+                else:
+                    final_skip = True
+            if final_skip:
+                break
+            else:
+                next_qs = Papi.parse_qs(json_result.next_url)
     elif args.twitter:
         from providers.twitter import twitter_generator
         for image_data, metadata in twitter_generator(Path(args.twitter), exists):
@@ -158,10 +164,12 @@ if __name__ == '__main__':
         local, = db.execute("SELECT local FROM pixiv WHERE source == ?", (args.delete,)).fetchone()
         source_site, _, source_id = args.delete.partition(':')
         if source_site == 'pixiv':
+            from providers.pixiv import Papi
             illust_id, _, pixiv_i = source_id.partition('_p')
             if pixiv_i == '' or pixiv_i == '0':
                 pprint(Papi.illust_bookmark_delete(illust_id))
         (local_root / local).unlink()
         db.execute("DELETE FROM pixiv WHERE source == ?", (args.delete,))
+        db.commit()
 
     db.close()

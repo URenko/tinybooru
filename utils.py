@@ -49,6 +49,7 @@ def get_pixiv_metadata(pixiv_id: str):
         raise NotImplementedError
     illust = _p['illust']
     pixiv_i_y = bool(illust['meta_pages'])
+    assert pixiv_i_y == (pixiv_i != '')
     pximg_url = illust['meta_pages'][int(pixiv_i)]['image_urls']['original'] if pixiv_i_y else illust['meta_single_page']['original_image_url']
     if not pximg_url.startswith('https://i.pximg.net'):
         pprint(_p)

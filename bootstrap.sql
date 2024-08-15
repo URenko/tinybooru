@@ -1,1 +1,26 @@
-CREATE TABLE pixiv(source PRIMARY KEY, `from`, source_url, local, title, caption, tags, thumbnail TEXT)
+CREATE TABLE pixiv(
+    pixiv TEXT,
+    twitter TEXT,
+    yandere INTEGER UNIQUE,
+    danbooru INTEGER UNIQUE,
+    gelbooru INTEGER UNIQUE,
+    zerochan INTEGER UNIQUE,
+    unique_source TEXT UNIQUE,
+    nonunique_source TEXT,
+    `from` TEXT,
+    source_url TEXT UNIQUE,
+    local TEXT UNIQUE NOT NULL,
+    title TEXT,
+    caption TEXT,
+    custom_tags TEXT,
+    pixiv_tags TEXT,
+    booru_tags TEXT,
+    romanized_tags TEXT,
+    translated_tags TEXT,
+    ML_tags TEXT,
+    thumbnail TEXT,
+    aHash INTEGER,
+    pHash INTEGER,
+    dHash INTEGER,
+    wHash INTEGER
+)

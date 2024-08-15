@@ -4,8 +4,9 @@
 
 ## 数据库字段说明
 ```
-source: 源头，以 站:id 编码，没有则使用 URL
-from: 实际从该 URL 网页获取的图片，pixiv 不填写
+pixiv - zerochan: 源站 ID
+unique_source, nonunique_source: 并非来自以上站点时填写的源站
+from: 实际从该 URL 网页获取的图片，pixiv 可不填写
 source_url: 实际是从该 URL 下载的图片
 local: 本地文件名
 title: （短）标题

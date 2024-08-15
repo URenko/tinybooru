@@ -22,9 +22,9 @@ from config import local_root
 local_root = local_root / 'pixiv'
 
 
-def update_thumb(source: str, db: sqlite3.Connection, target_size=5*2**20):
-    print(source)
-    local, = db.execute('SELECT local FROM pixiv WHERE source = ?', (source,)).fetchone()
+def update_thumb(rowid: str, db: sqlite3.Connection, target_size=5*2**20):
+    print(rowid)
+    local, = db.execute('SELECT local FROM pixiv WHERE rowid = ?', (rowid,)).fetchone()
 
     origin_path = local_root / local
     origin_name = PurePosixPath(local).name
@@ -99,7 +99,7 @@ def update_thumb(source: str, db: sqlite3.Connection, target_size=5*2**20):
         print('.', end='')
         time.sleep(6)
     
-    db.execute('UPDATE pixiv SET thumbnail = ? WHERE source = ?', (URL, source))
+    db.execute('UPDATE pixiv SET thumbnail = ? WHERE rowid = ?', (URL, rowid))
 
 if __name__ == "__main__":
     db = sqlite3.connect("pixiv.db")

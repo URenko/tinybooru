@@ -6,8 +6,13 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/awesomplete/awesomplete.min.css" />
     <script src="https://cdn.jsdelivr.net/npm/awesomplete/awesomplete.min.js" async></script>
     <meta name="referrer" content="same-origin" />
+    <style type="text/css">
+        a {
+            color: rgb(29, 155, 240);
+        }
+    </style>
 </head>
-<body>
+<body style="background: black;">
     <form action="" method="get" class="form-example">
         <select id="order" name="order" onchange="this.form.submit()">
             <option value="desc">New → Old</option>
@@ -30,7 +35,7 @@
                     let grid = document.getElementById('grid');
                     j.forEach(item => {
                         let figure = document.createElement('figure');
-                        figure.id = item.source;
+                        figure.id = item.rowid;
                         figure.style = "margin: 0;"
                         let img = document.createElement('img');
                         img.loading = 'lazy';
@@ -38,7 +43,8 @@
                         img.src = item.thumbnail;
                         img.onclick= e => location.href = 'original?'+item.local;
                         let figcaption = document.createElement('figcaption');
-                        figcaption.innerHTML = '<p style="text-align:center">' + item.title + '</p>' + item.caption + '<br/>🏷️ ' + item.tags.split(', ').map(tag => `<a href="?q=${tag}">${tag}</a>`).join(', ');
+                        figcaption.style.color = 'white';
+                        figcaption.innerHTML = '<p style="text-align:center">' + item.title + '</p>' + item.caption + '<br/>🏷️ ' + item.translated_tags.split(', ').map(tag => `<a href="?q=${tag}">${tag}</a>`).join(', ');
                         figure.append(img);
                         figure.append(figcaption);
                         grid.appendChild(figure);

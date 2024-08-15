@@ -37,30 +37,22 @@ from config import ffmpeg
 from utils import image_verify, get_metadata, url2source
 
 
-SearchResult = namedtuple('SearchResult', ['link', 'similarity', 'site_and_ids'])
+SearchResult = namedtuple('SearchResult', ['link', 'similar', 'site_and_ids'])
 
 def sim_twitter_id(a: str|None, b: str|None):
     '''
-    twitter ID 粗糙比较，条件：
-    ① 不为 None
-    ② twitter:
-    ③ id 相同
+    twitter ID 粗糙比较
     '''
-    if a is None or b is None or not a.startswith("twitter:") or not b.startswith("twitter"):
+    if a is None or b is None:
         return False
-    if not a.isnumeric():
-        a = re.fullmatch(r"twitter:(\d+)@\d", a, re.ASCII)[1]
-    if not b.isnumeric():
-        b = re.fullmatch(r"twitter:(\d+)@\d", b, re.ASCII)[1]
-    return a == b
+    return a.partition('#')[0] == b.partition('#')[0]
 
-def ascii2d_eq_twitter(search_result: SearchResult, source: str, threshold=img_like.threshold):
-    if sim_twitter_id(search_result.site_and_ids.get('twitter'), source):
+def ascii2d_eq_twitter(search_result: SearchResult, twitter_id: str):
+    if sim_twitter_id(search_result.site_and_ids.get('twitter'), twitter_id):
         return True
-    if search_result.similarity >= threshold:
-        for site in ('yandere', 'danbooru', 'gelbooru'):
-            if site in search_result.site_and_ids and sim_twitter_id(get_metadata(site, search_result.site_and_ids[site], coarse=True).get('source'), source):
-                return True
+    if search_result.similar:
+        return any(site in search_result.site_and_ids and sim_twitter_id(get_metadata(site, search_result.site_and_ids[site], coarse=True).get('twitter'), twitter_id)
+                   for site in ('yandere', 'danbooru', 'gelbooru'))
     return False
 
 saucenao_last_call_time = 0
@@ -68,7 +60,6 @@ saucenao_last_call_time = 0
 def process_search_results(
         search_results: list[SearchResult],
         search_identities: list[SearchResult],
-        threshold: float,
         metadata: dict,
         display_url: str,
         checkpoint: set
@@ -76,20 +67,16 @@ def process_search_results(
     pprint(search_results)
     pprint(search_identities)
     assert len(search_identities) + len(search_results) > 0
-    max_similarity = max(map(lambda search_result: search_result.similarity, search_results))
-    if max_similarity >= threshold:
-        print(f"发现相似图片，相似度 {'[red]' if max_similarity >= 0.9 else ''}{max_similarity:.2%}{'[/red]' if max_similarity >= 0.9 else ''}，见 {display_url}")
+    if any(map(lambda search_result: search_result.similar, search_results)):
+        print(f"发现相似图片，见 {display_url}")
         if Confirm.ask('找到了? 抛弃原图并手动收藏识图'):
-            checkpoint.add(metadata['source'])
+            checkpoint.add(metadata['twitter'])
             return False
-    pre_tags = metadata['tags'].split(', ')
-    normal_tags = []
     # 反向优先级解析以覆盖 normal_tags
     for site in ('gelbooru', 'danbooru', 'yandere'):
         if (search_result := next(filter(lambda search_result: site in search_result.site_and_ids, search_identities), None)) is not None:
-            normal_tags = get_metadata(site, search_result.site_and_ids[site], coarse=True)['tags']
-            pre_tags.append(f'{site}_id:{search_result.site_and_ids[site]}')
-    metadata['tags'] = ', '.join(pre_tags + normal_tags)
+            metadata['booru_tags'] = get_metadata(site, search_result.site_and_ids[site], coarse=True)['booru_tags']
+            metadata[site] = search_result.site_and_ids[site]
     return True
 
 def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: bool = True):
@@ -117,7 +104,7 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                     video_path = Path(source_url_parsed.path)
                     assert video_path.suffix == '.mp4'
                     metadata = {
-                        "source": f"twitter:{item['id']}@{index+1}",
+                        "twitter": f"{item['id']}#{index+1}",
                         'local': video_path.name,
                     }
                     if len(item['media']) > 1: metadata['local'] = item['id'] + '/' + metadata['local']
@@ -146,19 +133,19 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                     format = parse_qs(source_url_parsed.query)['format'][0]
                     assert format in ('jpg', 'png')
                     metadata = {
-                        "source": f"twitter:{item['id']}@{index+1}",
+                        "twitter": f"{item['id']}#{index+1}",
                         "from": item['metadata']['legacy']['extended_entities']['media'][index]['expanded_url'],
                         "source_url": source_url,
                         "local": PurePosixPath(unquote(source_url_parsed.path)).name + '.' + format,
                         "title": None,
                         "caption": item['full_text'],
-                        "tags": "©:"+artist,
+                        "custom_tags": ["©:"+artist],
                     }
                     if len(item['media']) > 1: metadata['local'] = item['id'] + '/' + metadata['local']
-                    if metadata['source'] in checkpoint:
+                    if metadata['twitter'] in checkpoint:
                         continue
                     if exists(metadata):
-                        checkpoint.add(metadata['source'])
+                        checkpoint.add(metadata['twitter'])
                         continue
                     
                     r = s.get(metadata['source_url'], timeout=300)
@@ -166,7 +153,8 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                         print('该图已被删除')
                         continue
                     r.raise_for_status()
-                    image_verify(r.content)
+                    img = image_verify(r.content)
+                    print(f'尺寸: {img.size}, 文件大小: {len(r.content)/2**10:.1f} KB.')
 
                     if search:
                         # 识图
@@ -174,7 +162,7 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                         # TODO: 手动模式
                         # print(f'https://ascii2d.net/search/url/{search_url}')
                         # if Confirm.ask('找到了? 抛弃原图并手动收藏识图'):
-                        #     checkpoint.add(metadata['source'])
+                        #     checkpoint.add(metadata['twitter'])
                         #     continue
 
                         ## 识图 ascii2d
@@ -197,34 +185,32 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                         assert item_boxes[0].div.img['loading'] == 'eager', item_boxes[0]
                         search_results = []
                         search_identities = []
-                        for item_box in item_boxes[1:]:
+                        for item_box in item_boxes[1:7]:
                             assert item_box.div.img['loading'] == 'lazy', item_box
                             thumb_request = scraper.get(ascii2d_host+item_box.div.img['src'])
                             if thumb_request.status_code == http.HTTPStatus.NOT_FOUND or ascii2d_host == thumb_request.url:
-                                similarity = 0
+                                similar = False
                             elif len(thumb_request.content) == 0:
-                                similarity = 0
+                                similar = False
                             else:
                                 image_verify(thumb_request.content)
-                                similarity = img_like.sim(Image.open(BytesIO(thumb_request.content)), Image.open(BytesIO(raw_request.content)))
+                                similar = img_like.sim(Image.open(BytesIO(thumb_request.content)), Image.open(BytesIO(raw_request.content)), thumb_request.url)
                             if item_box.find('div', class_='detail-box').a is None:
                                 continue
                             site_and_ids = {}
                             link = item_box.find('div', class_='detail-box').a['href']
-                            search_result_source = url2source(link, coarse=True)
-                            if search_result_source is not None:
-                                site, _, id = search_result_source.partition(':')
-                                site_and_ids[site] = id
+                            site, id = url2source(link, coarse=True)
+                            site_and_ids[site] = id
                             search_result = SearchResult(
                                 link=link,
-                                similarity=similarity,
+                                similar=similar,
                                 site_and_ids=site_and_ids
                             )
-                            if ascii2d_eq_twitter(search_result, metadata['source']):
+                            if ascii2d_eq_twitter(search_result, metadata['twitter']):
                                 search_identities.append(search_result)
                             else:
                                 search_results.append(search_result)
-                        if process_search_results(search_results, search_identities, img_like.threshold, metadata, f'https://ascii2d.net/search/url/{search_url}', checkpoint) is False:
+                        if process_search_results(search_results, search_identities, metadata, f'https://ascii2d.net/search/url/{search_url}', checkpoint) is False:
                             continue
 
                         ## ascii2d: 特徴検索
@@ -236,38 +222,36 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                         assert item_boxes[0].div.img['loading'] == 'eager'
                         search_results = []
                         search_identities = []
-                        for item_box in item_boxes[1:]:
+                        for item_box in item_boxes[1:7]:
                             assert item_box.div.img['loading'] == 'lazy'
                             thumb_request = scraper.get(ascii2d_host+item_box.div.img['src'])
                             if thumb_request.status_code == http.HTTPStatus.NOT_FOUND or ascii2d_host == thumb_request.url:
-                                similarity = 0
+                                similar = False
                             else:
                                 image_verify(thumb_request.content)
-                                similarity = img_like.sim(Image.open(BytesIO(thumb_request.content)), Image.open(BytesIO(raw_request.content)))
+                                similar = img_like.sim(Image.open(BytesIO(thumb_request.content)), Image.open(BytesIO(raw_request.content)), thumb_request.url)
                             if item_box.find('div', class_='detail-box').a is None:
                                 continue
                             site_and_ids = {}
                             link = item_box.find('div', class_='detail-box').a['href']
-                            search_result_source = url2source(link, coarse=True)
-                            if search_result_source is not None:
-                                site, _, id = search_result_source.partition(':')
-                                site_and_ids[site] = id
+                            site, id = url2source(link, coarse=True)
+                            site_and_ids[site] = id
                             search_result = SearchResult(
                                 link=link,
-                                similarity=similarity,
+                                similar=similar,
                                 site_and_ids=site_and_ids
                             )
-                            if ascii2d_eq_twitter(search_result, metadata['source']):
+                            if ascii2d_eq_twitter(search_result, metadata['twitter']):
                                 search_identities.append(search_result)
                             else:
                                 search_results.append(search_result)
-                        if process_search_results(search_results, search_identities, img_like.threshold, metadata, next_ascii2d_url, checkpoint) is False:
+                        if process_search_results(search_results, search_identities, metadata, next_ascii2d_url, checkpoint) is False:
                             continue
 
                         # 识图 SauceNAO
                         time.sleep(max(0, 10 - (time.time() - saucenao_last_call_time)))
                         saucenao_last_call_time = time.time()
-                        _r = s.get(f'https://saucenao.com/search.php?output_type=2&db=999&url={quote_plus(search_url)}&api_key=63b003c17c4a1482f0a9b61a8232241c03fc836f')
+                        _r = s.get(f'https://saucenao.com/search.php?output_type=2&db=999&url={quote_plus(search_url)}&api_key={os.environ('saucenao_apikey')}')
                         if _r.status_code != http.HTTPStatus.OK:
                             print(_r.text)
                             break_flag = True
@@ -281,26 +265,24 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                         for result in results:
                             site_and_ids={}
                             if 'source' in result['data']:
-                                if (site_id_str := url2source(result['data']['source'], coarse=True)) is not None:
-                                    site, _, id = site_id_str.partition(':')
-                                    site_and_ids[site] = id
+                                site, id = url2source(result['data']['source'], coarse=True)
+                                site_and_ids[site] = id
                             for ext_url in result['data'].get('ext_urls', []):
-                                if (site_id_str := url2source(ext_url, coarse=True)) is not None:
-                                    site, _, id = site_id_str.partition(':')
-                                    site_and_ids[site] = id
+                                site, id = url2source(ext_url, coarse=True)
+                                site_and_ids[site] = id
                             for site in ('pixiv', 'yandere', 'danbooru', 'gelbooru'):
                                 if f"{site}_id" in result['data']:
                                     site_and_ids[site] = result['data'][f"{site}_id"]
                             search_result = SearchResult(
                                 link = result['data'].get('source'),
-                                similarity=float(result['header']['similarity']) / 100,
+                                similar=float(result['header']['similarity']) >= 57,
                                 site_and_ids=site_and_ids
                             )
-                            if ascii2d_eq_twitter(search_result, metadata['source'], threshold=0.57):
+                            if ascii2d_eq_twitter(search_result, metadata['twitter']):
                                 search_identities.append(search_result)
                             else:
                                 search_results.append(search_result)
-                        if process_search_results(search_results, search_identities, 0.57, metadata, f"https://saucenao.com/search.php?url={quote_plus(search_url)}", checkpoint) is False:
+                        if process_search_results(search_results, search_identities, metadata, f"https://saucenao.com/search.php?url={quote_plus(search_url)}", checkpoint) is False:
                             continue
 
                     # 元数据写入 jpg 图片
@@ -324,7 +306,7 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                     pprint(metadata)
                     yield img_data, metadata
                 
-                checkpoint.add(metadata['source'])
+                checkpoint.add(metadata['twitter'])
 
         if not break_flag:
             Path('./twitter_metadata_archive/').mkdir(exist_ok=True)

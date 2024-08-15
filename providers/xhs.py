@@ -39,12 +39,13 @@ def xhs_generator(link_path: str, exists: Callable[[dict], bool]):
         try:
             artist = f"{item['作者昵称']}${item['作者ID']}"
             metadata = {
-                'source': f"xhs:{item['作品ID']}",
+                'xhs': item['作品ID'],
                 'from': item['作品链接'],
                 'title': item['作品标题'],
                 'caption': item['作品描述'],
-                'source_url': item['作品链接'],
-                'tag': ', '.join(["©:"+artist]+item['作品标签'].split(' ')),
+                'source_url': item['下载地址'],
+                'custom_tags': "©:"+artist,
+                'xhs_tags': ', '.join(item['作品标签'].split(' ')),
                 'raw_detail': item,
             }
             pprint(metadata)
@@ -69,4 +70,4 @@ def xhs_generator(link_path: str, exists: Callable[[dict], bool]):
             print(item)
             raise
     if link_path != '-':
-        link_path.unlink()
+        Path(link_path).unlink()

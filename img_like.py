@@ -16,9 +16,9 @@ def ML_sim(a, b, comment=''):
     fa = m(stack)
     fa = F.normalize(fa, p=2, dim=1) 
     similarity = fa[0].dot(fa[1]).item()
-    if similarity > 0.7117 and similarity <= 0.74:
+    if similarity > 0.7117 and similarity <= 0.719:
         input(f"{comment}\n{similarity=}, 可疑")
-    return similarity > 0.74
+    return similarity > 0.719
  
 # threshold = 0.7
 # 0.8985 0.8639 0.8199 0.7863
@@ -26,6 +26,7 @@ def ML_sim(a, b, comment=''):
 
 # identical 阈值
 # 待考察: 0.9
+
 
 def hamming_distance(a: int, b: int, signed: bool):
     if signed:

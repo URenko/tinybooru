@@ -30,8 +30,9 @@ scraper = cloudscraper.create_scraper()
 scraper.mount('http://', HTTPAdapter(max_retries=retries))
 scraper.mount('https://', HTTPAdapter(max_retries=retries))
 
-ascii2d_prefix = os.environ.get('ascii2d_prefix', 'https://ascii2d.net')
-ascii2d_host = os.environ.get('ascii2d_host', 'https://ascii2d.net')
+ascii2d_prefix = os.environ.get('ascii2d_prefix', 'https://')
+_ascii2d_url_parsed = urlparse(ascii2d_prefix+'ascii2d.net')
+ascii2d_host = _ascii2d_url_parsed.scheme + '://' + _ascii2d_url_parsed.hostname
 
 from config import ffmpeg
 from utils import image_verify, get_metadata, url2source
@@ -169,7 +170,7 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                         raw_request = s.get(source_url)
                         image_verify(raw_request.content)
                         for _ in range(3):
-                            _r = scraper.get(f'{ascii2d_prefix}/search/url/{search_url}', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; rv:125.0) Gecko/20100101 Firefox/125.0'})
+                            _r = scraper.get(f'{ascii2d_prefix}ascii2d.net/search/url/{search_url}', headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; rv:125.0) Gecko/20100101 Firefox/125.0'})
                             try:
                                 _r.raise_for_status()
                             except Exception:
@@ -185,8 +186,7 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                         assert item_boxes[0].div.img['loading'] == 'eager', item_boxes[0]
                         search_results = []
                         search_identities = []
-                        for item_box in item_boxes[1:7]:
-                            assert item_box.div.img['loading'] == 'lazy', item_box
+                        for item_box in item_boxes[:7]:
                             thumb_request = scraper.get(ascii2d_host+item_box.div.img['src'])
                             if thumb_request.status_code == http.HTTPStatus.NOT_FOUND or ascii2d_host == thumb_request.url:
                                 similar = False
@@ -199,6 +199,7 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                                 continue
                             site_and_ids = {}
                             link = item_box.find('div', class_='detail-box').a['href']
+                            link = 'https://' + link.removeprefix(ascii2d_prefix)
                             site, id = url2source(link, coarse=True)
                             site_and_ids[site] = id
                             search_result = SearchResult(
@@ -222,8 +223,7 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                         assert item_boxes[0].div.img['loading'] == 'eager'
                         search_results = []
                         search_identities = []
-                        for item_box in item_boxes[1:7]:
-                            assert item_box.div.img['loading'] == 'lazy'
+                        for item_box in item_boxes[:7]:
                             thumb_request = scraper.get(ascii2d_host+item_box.div.img['src'])
                             if thumb_request.status_code == http.HTTPStatus.NOT_FOUND or ascii2d_host == thumb_request.url:
                                 similar = False
@@ -234,6 +234,7 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                                 continue
                             site_and_ids = {}
                             link = item_box.find('div', class_='detail-box').a['href']
+                            link = 'https://' + link.removeprefix(ascii2d_prefix)
                             site, id = url2source(link, coarse=True)
                             site_and_ids[site] = id
                             search_result = SearchResult(
@@ -251,7 +252,7 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                         # 识图 SauceNAO
                         time.sleep(max(0, 10 - (time.time() - saucenao_last_call_time)))
                         saucenao_last_call_time = time.time()
-                        _r = s.get(f'https://saucenao.com/search.php?output_type=2&db=999&url={quote_plus(search_url)}&api_key={os.environ('saucenao_apikey')}')
+                        _r = s.get(f"https://saucenao.com/search.php?output_type=2&db=999&url={quote_plus(search_url)}&api_key={os.environ['saucenao_apikey']}")
                         if _r.status_code != http.HTTPStatus.OK:
                             print(_r.text)
                             break_flag = True

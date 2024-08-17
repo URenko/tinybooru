@@ -157,6 +157,8 @@ def url2source(url: str, coarse=False):
         return Source('yandere', m[1])
     elif not (m := re.fullmatch(r'https?://danbooru\.donmai\.us/posts/(\d+)', url)) is None:
         return Source('danbooru', m[1])
+    elif not (m := re.fullmatch(r'https?://danbooru\.donmai\.us/post/show/(\d+)', url)) is None:
+        return Source('danbooru', m[1])
     elif not (m := re.fullmatch(r'https?://gelbooru\.com/index\.php\?page=post&s=view&id=(\d+)', url)) is None:
         return Source('gelbooru', m[1])
     elif not (m := re.fullmatch(r'https?://www\.zerochan\.net/(\d+)', url)) is None:

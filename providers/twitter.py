@@ -110,7 +110,7 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                     }
                     if len(item['media']) > 1: metadata['local'] = item['id'] + '/' + metadata['local']
                     if exists(metadata):
-                        checkpoint.add(metadata['source'])
+                        checkpoint.add(metadata['twitter'])
                         continue
                     with tempfile.NamedTemporaryFile(suffix='.mp4') as tmp:
                         tmp.write(s.get(source_url).content)

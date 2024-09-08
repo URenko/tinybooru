@@ -72,7 +72,7 @@ def get_yandere_metadata(id: str):
     j = s.get(f"https://yande.re/post.json?tags=id:{id}").json()[0]
     ret =  {
         'booru_tags': list(j['tags'].split(' ')),
-        'source_url': j['file_url'],
+        'source_url': j.get('file_url'),
     }
     if j['source'] != "":
         if not j["source"].startswith('http'):

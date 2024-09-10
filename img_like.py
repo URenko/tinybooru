@@ -16,9 +16,9 @@ def ML_sim(a, b, comment=''):
     fa = m(stack)
     fa = F.normalize(fa, p=2, dim=1) 
     similarity = fa[0].dot(fa[1]).item()
-    if similarity > 0.7117 and similarity <= 0.719:
+    if similarity > 0.7117 and similarity <= 0.7166:
         input(f"{comment}\n{similarity=}, 可疑")
-    return similarity > 0.719
+    return similarity > 0.7166
  
 # threshold = 0.7
 # 0.8985 0.8639 0.8199 0.7863

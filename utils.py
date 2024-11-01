@@ -55,9 +55,7 @@ def get_pixiv_metadata(pixiv_id: str):
     if not pximg_url.startswith('https://i.pximg.net'):
         pprint(_p)
         return
-    # if illust['tags']:
-    #     assert 'translated_name' in illust['tags'][0]
-    return {
+    ret = {
         'custom_tags': [f"🔞:{illust['sanity_level']}", f"©:{illust['user']['name']}${illust['user']['id']}@{illust['user']['account']}"],
         'pixiv_tags': [tag['name'] for tag in illust['tags']],
         # 'translated_tags': [tag['name'] if tag['translated_name'] is None else tag['translated_name'] for tag in illust['tags']],
@@ -65,6 +63,12 @@ def get_pixiv_metadata(pixiv_id: str):
         'caption': illust['caption'],
         'source_url': pximg_url
     }
+    if illust['illust_ai_type'] == 2:
+        # 0 = undefined
+        # 1 = humanCreated
+        # 2 = aiGenerated
+        ret['custom_tags'].append('🤖')
+    return ret
 
 
 @functools.cache

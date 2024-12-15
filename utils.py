@@ -9,7 +9,6 @@ from rich.traceback import install
 install()
 from rich import print
 from rich.prompt import Prompt, IntPrompt, Confirm
-from imagehash import ImageHash
 
 # try:
 #     import httpx
@@ -116,6 +115,7 @@ def get_gelbooru_metadata(id: str):
             ret['source'] = j['source']
     return ret
 
+@functools.cache
 def get_zerochan_metadata(id: str):
     j = s.get(f"https://www.zerochan.net/{id}?json", headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; rv:102.0) Gecko/20100101 Firefox/102.0"}).json()
     ret = {
@@ -255,12 +255,4 @@ def process_tags(metadata: dict[str, list[str]]):
     metadata['booru_tags'] = ', '.join(metadata['booru_tags'])
     metadata['romanized_tags'] = ', '.join(metadata['romanized_tags'])
     metadata['translated_tags'] = ', '.join(metadata['translated_tags'])
-
-
-def ImageHash2int(imagehash: ImageHash, signed=True):
-    ret = sum([2**i for i, v in enumerate(imagehash.hash.flatten()) if v])
-    if signed:
-        return int.from_bytes(ret.to_bytes(length=8, byteorder='big', signed=False), byteorder='big', signed=True)
-    else:
-        return ret
 

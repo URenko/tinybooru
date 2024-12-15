@@ -22,5 +22,7 @@ CREATE TABLE pixiv(
     aHash INTEGER,
     pHash INTEGER,
     dHash INTEGER,
-    wHash INTEGER
+    wHash INTEGER,
+    CLIP_hash BLOB NOT NULL,
+    ORB_hash BLOB NOT NULL
 )

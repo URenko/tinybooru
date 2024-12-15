@@ -10,3 +10,5 @@ sqlite3_cli.py
 .vscode/
 __pycache__/
 ad hoc/
+*_index
+*_index_*

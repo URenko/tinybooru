@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 
-import functools
 from io import BytesIO
-import json, sqlite3, re, argparse, os, tempfile, subprocess, filecmp, http, shutil
+import time, sqlite3, re, argparse, os, shutil
 from pathlib import Path, PurePath
 from urllib.parse import unquote
 from html import unescape
@@ -14,11 +13,12 @@ from rich.traceback import install
 install()
 from rich import print
 pprint = print
-from rich.prompt import Confirm
+from rich.prompt import Confirm, Prompt
 
 from jxl import jxl
 from thumb_gen import update_thumb
-from utils import image_verify, get_metadata, url2source, process_tags, ImageHash2int
+from utils import image_verify, get_metadata, url2source, process_tags
+from img_like import ImageHash2int, CLIP_hash, ORB_hash
 
 from config import local_root, sqlite3_path
 local_root = local_root / 'pixiv'
@@ -31,10 +31,11 @@ db = sqlite3.connect(sqlite3_path)
 import urllib3
 assert urllib3.__version__ > "2"
 import requests
-from requests.adapters import HTTPAdapter
+from requests.adapters import HTTPAdapter, Retry
 s = requests.Session()
-s.mount('http://', HTTPAdapter(max_retries=15))
-s.mount('https://', HTTPAdapter(max_retries=15))
+retries = Retry(backoff_factor=1)
+s.mount('http://', HTTPAdapter(max_retries=retries))
+s.mount('https://', HTTPAdapter(max_retries=retries))
 # s.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; rv:125.0) Gecko/20100101 Firefox/125.0"})
 
 
@@ -58,7 +59,14 @@ def pull_picture(source_site: str, source_id: str, from_: str = None):
         r = s.get(metadata['source_url'].replace('i.pximg.net', 'o.acgpic.net'), headers={"Referer": "https://pixivic.com/illusts/114514?VNK=da32baf"}, timeout=(15, 300))
     else:
         metadata['local'] = unquote(os.path.basename(metadata['source_url']))
-        r = s.get(metadata['source_url'], timeout=(15, 300))
+        for _ in range(3):
+            try:
+                r = s.get(metadata['source_url'], timeout=(15, 300))
+                break
+            except requests.exceptions.ChunkedEncodingError:
+                time.sleep(7)
+        else:
+            raise
     r.raise_for_status()
 
     store_image(r.content, metadata)
@@ -144,6 +152,8 @@ def store_image(image: bytes | Path, metadata: dict):
             'pHash': ImageHash2int(phash(img)),
             'dHash': ImageHash2int(dhash(img)),
             'wHash': ImageHash2int(whash(img)),
+            'CLIP_hash': CLIP_hash(img).tobytes(),
+            'ORB_hash': ORB_hash(img).tobytes()
         }) | metadata
 
     if (row := exists(metadata)) is not None:
@@ -161,7 +171,11 @@ def store_image(image: bytes | Path, metadata: dict):
         fpath.parent.mkdir(exist_ok=True)
         fpath.write_bytes(image_data)
     metadata['local'] = PurePath(metadata['local']).with_name(jxl(fpath).name).as_posix()
-    pprint(dict(metadata))
+    
+    display_metadata = dict(metadata)
+    del display_metadata['CLIP_hash']
+    del display_metadata['ORB_hash']
+    pprint(display_metadata)
 
     cursor = db.cursor()
     cursor.execute(f"INSERT INTO pixiv VALUES({', '.join(':'+k for k in metadata.keys())})", metadata)
@@ -192,8 +206,8 @@ if __name__ == '__main__':
         else:
             raise NotImplementedError(args.add)
     elif args.local is not None:
-        from_ = input('来源URL(用于source, from) ')
-        source_site, source_id = url2source(from_)
+        from_ = Prompt.ask('from')
+        source_site, source_id = url2source(Prompt.ask('source URL'))
         store_image(
             Path(args.local),
             {source_site: source_id, 'from': from_}

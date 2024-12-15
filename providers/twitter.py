@@ -48,13 +48,13 @@ def sim_twitter_id(a: str|None, b: str|None):
         return False
     return a.partition('#')[0] == b.partition('#')[0]
 
-def ascii2d_eq_twitter(search_result: SearchResult, twitter_id: str):
-    if sim_twitter_id(search_result.site_and_ids.get('twitter'), twitter_id):
+def is_same_twitter(site_and_ids: dict[str, str], twitter_id: str):
+    if sim_twitter_id(site_and_ids.get('twitter'), twitter_id):
         return True
-    if search_result.similar:
-        return any(site in search_result.site_and_ids and sim_twitter_id(get_metadata(site, search_result.site_and_ids[site], coarse=True).get('twitter'), twitter_id)
-                   for site in ('yandere', 'danbooru', 'gelbooru'))
-    return False
+    return any(
+        site in site_and_ids and sim_twitter_id(get_metadata(site, site_and_ids[site], coarse=True).get('twitter'), twitter_id)
+        for site in ('yandere', 'danbooru', 'gelbooru')
+    )
 
 saucenao_last_call_time = 0
 
@@ -67,7 +67,6 @@ def process_search_results(
     ) -> bool:  # False 指示抛弃该原图, continue
     pprint(search_results)
     pprint(search_identities)
-    assert len(search_identities) + len(search_results) > 0
     if any(map(lambda search_result: search_result.similar, search_results)):
         print(f"发现相似图片，见 {display_url}")
         if Confirm.ask('找到了? 抛弃原图并手动收藏识图'):
@@ -146,7 +145,7 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                     # AI ?
                     description = item['metadata']['core']['user_results']['result']['legacy']['description']
                     location = item['metadata']['core']['user_results']['result']['legacy']['location']
-                    if not ('禁止' in location or '禁止' in description or '無断' in location or '無断' in description or 'NG' in location or 'NG' in description):
+                    if not ('禁止' in location or '禁止' in description or '無断' in location or '無断' in description or 'NG' in location or 'NG' in description or 'prohibited' in location.casefold() or 'prohibited' in description.casefold()):
                         print(description)
                         description = description.upper()
                         AI_keywords = ('AI', 'Stable Diffusion', 'Nijijourney', 'Midjourney')
@@ -177,7 +176,7 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                         #     checkpoint.add(metadata['twitter'])
                         #     continue
 
-                        ## 识图 ascii2d
+                        print(' -> ascii2d 色合検索')
                         raw_request = s.get(source_url)
                         image_verify(raw_request.content)
                         for _ in range(3):
@@ -197,7 +196,26 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                         assert item_boxes[0].div.img['loading'] == 'eager', item_boxes[0]
                         search_results = []
                         search_identities = []
-                        for item_box in item_boxes[:7]:
+                        for item_index, item_box in enumerate(item_boxes):
+                            if item_box.find('div', class_='detail-box').a is None:
+                                if item_index == 0:
+                                    print('[green]无描述，跳过此项[/green]')
+                                continue
+                            site_and_ids = {}
+                            link = item_box.find('div', class_='detail-box').a['href']
+                            link = 'https://' + link.removeprefix(ascii2d_prefix)
+                            site, id = url2source(link, coarse=True)
+                            site_and_ids[site] = id
+                            if is_same_twitter(site_and_ids, metadata['twitter']):
+                                print('[green]相同 twitter ID，跳过此项[/green]')
+                                search_result = SearchResult(
+                                    link=link,
+                                    similar=True,
+                                    site_and_ids=site_and_ids
+                                )
+                                search_identities.append(search_result)
+                                continue
+
                             thumb_request = scraper.get(ascii2d_host+item_box.div.img['src'])
                             if thumb_request.status_code == http.HTTPStatus.NOT_FOUND or ascii2d_host == thumb_request.url:
                                 similar = False
@@ -206,26 +224,18 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                             else:
                                 image_verify(thumb_request.content)
                                 similar = img_like.sim(Image.open(BytesIO(thumb_request.content)), Image.open(BytesIO(raw_request.content)), thumb_request.url)
-                            if item_box.find('div', class_='detail-box').a is None:
-                                continue
-                            site_and_ids = {}
-                            link = item_box.find('div', class_='detail-box').a['href']
-                            link = 'https://' + link.removeprefix(ascii2d_prefix)
-                            site, id = url2source(link, coarse=True)
-                            site_and_ids[site] = id
+                                if similar is False:
+                                    break
                             search_result = SearchResult(
                                 link=link,
                                 similar=similar,
                                 site_and_ids=site_and_ids
                             )
-                            if ascii2d_eq_twitter(search_result, metadata['twitter']):
-                                search_identities.append(search_result)
-                            else:
-                                search_results.append(search_result)
+                            search_results.append(search_result)
                         if process_search_results(search_results, search_identities, metadata, f'https://ascii2d.net/search/url/{search_url}', checkpoint) is False:
                             continue
 
-                        ## ascii2d: 特徴検索
+                        print(' -> ascii2d 特徴検索')
                         next_ascii2d_url = ascii2d_host + soup.find("a", string="特徴検索")["href"]
                         _r = scraper.get(next_ascii2d_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; rv:125.0) Gecko/20100101 Firefox/125.0'})
                         _r.raise_for_status()
@@ -234,33 +244,46 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                         assert item_boxes[0].div.img['loading'] == 'eager'
                         search_results = []
                         search_identities = []
-                        for item_box in item_boxes[:7]:
-                            thumb_request = scraper.get(ascii2d_host+item_box.div.img['src'])
-                            if thumb_request.status_code == http.HTTPStatus.NOT_FOUND or ascii2d_host == thumb_request.url:
-                                similar = False
-                            else:
-                                image_verify(thumb_request.content)
-                                similar = img_like.sim(Image.open(BytesIO(thumb_request.content)), Image.open(BytesIO(raw_request.content)), thumb_request.url)
+                        for item_index, item_box in enumerate(item_boxes):
                             if item_box.find('div', class_='detail-box').a is None:
+                                if item_index == 0:
+                                    print('[green]无描述，跳过此项[/green]')
                                 continue
                             site_and_ids = {}
                             link = item_box.find('div', class_='detail-box').a['href']
                             link = 'https://' + link.removeprefix(ascii2d_prefix)
                             site, id = url2source(link, coarse=True)
                             site_and_ids[site] = id
+                            if is_same_twitter(site_and_ids, metadata['twitter']):
+                                print('[green]相同 twitter ID，跳过此项[/green]')
+                                search_result = SearchResult(
+                                    link=link,
+                                    similar=True,
+                                    site_and_ids=site_and_ids
+                                )
+                                search_identities.append(search_result)
+                                continue
+
+                            thumb_request = scraper.get(ascii2d_host+item_box.div.img['src'])
+                            if thumb_request.status_code == http.HTTPStatus.NOT_FOUND or ascii2d_host == thumb_request.url:
+                                similar = False
+                            elif len(thumb_request.content) == 0:
+                                similar = False
+                            else:
+                                image_verify(thumb_request.content)
+                                similar = img_like.sim(Image.open(BytesIO(thumb_request.content)), Image.open(BytesIO(raw_request.content)), thumb_request.url)
+                                if similar is False:
+                                    break
                             search_result = SearchResult(
                                 link=link,
                                 similar=similar,
                                 site_and_ids=site_and_ids
                             )
-                            if ascii2d_eq_twitter(search_result, metadata['twitter']):
-                                search_identities.append(search_result)
-                            else:
-                                search_results.append(search_result)
+                            search_results.append(search_result)
                         if process_search_results(search_results, search_identities, metadata, next_ascii2d_url, checkpoint) is False:
                             continue
 
-                        # 识图 SauceNAO
+                        print(' -> SauceNAO 识图')
                         time.sleep(max(0, 10 - (time.time() - saucenao_last_call_time)))
                         saucenao_last_call_time = time.time()
                         _r = s.get(f"https://saucenao.com/search.php?output_type=2&db=999&url={quote_plus(search_url)}&api_key={os.environ['saucenao_apikey']}")
@@ -290,7 +313,7 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                                 similar=float(result['header']['similarity']) >= 57,
                                 site_and_ids=site_and_ids
                             )
-                            if ascii2d_eq_twitter(search_result, metadata['twitter']):
+                            if is_same_twitter(site_and_ids, metadata['twitter']):
                                 search_identities.append(search_result)
                             else:
                                 search_results.append(search_result)

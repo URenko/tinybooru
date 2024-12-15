@@ -13,13 +13,27 @@
     </style>
 </head>
 <body style="background: black;">
-    <form action="" method="get" class="form-example">
+    <form action="" method="get">
         <select id="order" name="order" onchange="this.form.submit()">
             <option value="desc">New → Old</option>
             <option value="random">🎲</option>
             <option value="asc" selected>Old → New</option>
         </select>
         <input type="text" name="q" id="q" class="awesomplete" />
+        <input type="submit" hidden />
+    </form>
+    <form action="" method="post" enctype="multipart/form-data">
+        <select name="method">
+            <option value="MAGI">传统 hash 算法综合</option>
+            <option value="average_hash">Average hashing</option>
+            <option value="phash">Perceptual hashing</option>
+            <option value="dhash">Difference hashing</option>
+            <option value="whash">Wavelet hashing</option>
+            <option value="CLIP" selected>vit_large_patch14_clip_224.openai</option>
+            <option value="ORB">ORB-SLAM3</option>
+        </select>
+        <input type="url" name="url" placeholder="URL (press enter to search)"/>
+        <input type="file" accept="image/*" name="file" onchange='this.form.submit();'>
         <input type="submit" hidden />
     </form>
     <div id="grid" style="display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); grid-template-rows: masonry;"></div>
@@ -45,6 +59,8 @@
                         let figcaption = document.createElement('figcaption');
                         figcaption.style.color = 'white';
                         figcaption.innerHTML = '<p style="text-align:center">' + item.title + '</p>' + item.caption + '<br/>🏷️ ' + item.translated_tags.split(', ').map(tag => `<a href="?q=${tag}">${tag}</a>`).join(', ');
+                        if (item.similarity !== undefined && item.similarity !== -1)
+                            figcaption.innerHTML += `<br/><p style="text-align:center">Similarity: ${item.similarity}</p>`
                         figure.append(img);
                         figure.append(figcaption);
                         grid.appendChild(figure);

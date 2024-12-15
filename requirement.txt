@@ -1,2 +1,6 @@
 pillow
 pixivpy3
+numpy
+scipy
+python_orb_slam3
+faiss  # https://github.com/facebookresearch/faiss/blob/main/INSTALL.md

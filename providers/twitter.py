@@ -110,6 +110,7 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                     if len(item['media']) > 1: metadata['local'] = item['id'] + '/' + metadata['local']
                     if exists(metadata):
                         checkpoint.add(metadata['twitter'])
+                        print('文件已存在，跳过')
                         continue
                     with tempfile.NamedTemporaryFile(suffix='.mp4') as tmp:
                         tmp.write(s.get(source_url).content)
@@ -154,14 +155,19 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
 
                     if len(item['media']) > 1: metadata['local'] = item['id'] + '/' + metadata['local']
                     if metadata['twitter'] in checkpoint:
+                        print('已经存在于 checkpoint，跳过')
                         continue
                     if exists(metadata):
+                        print('文件已存在，跳过')
                         checkpoint.add(metadata['twitter'])
                         continue
                     
                     r = s.get(metadata['source_url'], timeout=300)
                     if r.status_code == http.HTTPStatus.NOT_FOUND:
                         print('该图已被删除')
+                        continue
+                    elif r.status_code == http.HTTPStatus.FORBIDDEN:
+                        print('403 用户无权？')
                         continue
                     r.raise_for_status()
                     img = image_verify(r.content)

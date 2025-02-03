@@ -179,6 +179,12 @@ def url2source(url: str, coarse=False):
         if not coarse and m[1].endswith('_p0'):
             return Source('pixiv', Prompt.ask('使用 pixiv', choices=[m[1], m[1].removesuffix('_p0')]))
         return Source('pixiv', m[1])
+    elif not (m := re.fullmatch(r'https?://i\d?.(?:pximg|pixiv).net/[\w/]+?/(\d+)\w*?_p(\d+)\.[\w\?]+', url)) is None:
+        return Source('pixiv', f'{m[1]}_p{m[2]}')
+    elif not (m := re.fullmatch(r'https?://i\d?.(?:pximg|pixiv).net/[\w/]+?/(\w+)\.[\w\?]+', url)) is None:
+        if not coarse and m[1].endswith('_p0'):
+            return Source('pixiv', Prompt.ask('使用 pixiv', choices=[m[1], m[1].removesuffix('_p0')]))
+        return Source('pixiv', m[1])
     elif (mime := mimetypes.guess_type(url, strict=False)[0]) is not None and mime.startswith('image/'):
         return Source('unique_source', url)
     elif coarse:

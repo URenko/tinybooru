@@ -206,11 +206,17 @@ if __name__ == '__main__':
         else:
             raise NotImplementedError(args.add)
     elif args.local is not None:
-        from_ = Prompt.ask('from')
-        source_site, source_id = url2source(Prompt.ask('source URL'))
+        from_ = Prompt.ask('from', default=None)
+        source_site, source_id = url2source(Prompt.ask('source'))
         store_image(
             Path(args.local),
-            {source_site: source_id, 'from': from_}
+            {
+                source_site: source_id,
+                'from': from_,
+                'source_url': Prompt.ask('source_url', default=None),
+                'title': Prompt.ask('title', default=None),
+                'caption': Prompt.ask('caption', default=None),
+            }
         )
     elif args.pixiv:
         from providers.pixiv import Papi

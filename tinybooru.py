@@ -10,7 +10,7 @@ s.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; rv:130.0) Gecko/2
 from imagehash import average_hash, phash, dhash, whash
 from img_like import hamming_distance, ImageHash2int, CLIP_hash, ORB_hash, wilson_score
 
-from fastapi import FastAPI, Depends, UploadFile, Form
+from fastapi import FastAPI, Depends, UploadFile, Form, BackgroundTasks
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 app = FastAPI()
@@ -151,7 +151,7 @@ def search_image(img_content: BytesIO, method: SearchMethod, db:sqlite3.Connecti
         with Image.open(img_content) as im:
             D, I = faiss_index[hash_name].search(
                 np.frombuffer(np.int64(ImageHash2int(hash_f(im))).tobytes(order='C'), dtype=np.uint8)[np.newaxis,:],
-                16
+                128
             )
         return faiss_index['rowid'][I[0]].tolist(), D[0].tolist()
     elif method == SearchMethod.CLIP:
@@ -162,9 +162,9 @@ def search_image(img_content: BytesIO, method: SearchMethod, db:sqlite3.Connecti
             query = CLIP_hash(im)
             D, I = faiss_index['CLIP'].search(
                 query,
-                16
+                128
             )
-        return I[0].tolist(), D[0].tolist()
+        return I[0].tolist(), [round(d, 3) for d in D[0]]
     elif method == SearchMethod.ORB:
         import heapq
         from collections import defaultdict
@@ -190,7 +190,6 @@ def search_image(img_content: BytesIO, method: SearchMethod, db:sqlite3.Connecti
         rowid_to_score = {rowid: score for rowid, v in kds.items() if (score := wilson_score(v)) > 0.2}
         
         sorted_rowid = heapq.nlargest(16, rowid_to_score, key=rowid_to_score.get)
-        print(sorted_rowid, [round(rowid_to_score[rowid] * 100, 2) for rowid in sorted_rowid])
 
         return sorted_rowid, [round(rowid_to_score[rowid] * 100, 2) for rowid in sorted_rowid]
 
@@ -199,9 +198,12 @@ def search_image(img_content: BytesIO, method: SearchMethod, db:sqlite3.Connecti
 def root():
     return HTMLResponse(content=Path('index.html').read_bytes(), status_code=200)
 
+@app.get("/rebuild_faiss_index")
+def rebuild_faiss_index(background_tasks: BackgroundTasks, db: sqlite3.Connection = Depends(get_db)):
+    background_tasks.add_task(build_faiss_index, db)
+
 @app.post("/")
 def post_root(file: UploadFile, url: str | None = Form(default=None), method: SearchMethod = Form(), db: sqlite3.Connection = Depends(get_db)):
-    build_faiss_index(db)
     if file.size > 0:
         found_rowids = search_image(file.file, method, db)
     else:
@@ -229,15 +231,15 @@ def search(page: int = 0, q: str = '', order: Order = Order.desc, _ri_s: str | N
             f"SELECT rowid, pixiv, twitter, yandere, danbooru, gelbooru, zerochan, unique_source, nonunique_source, `from`, source_url, local, title, caption, custom_tags, pixiv_tags, booru_tags, romanized_tags, translated_tags, ML_tags, thumbnail FROM {table_name} {'WHERE ' if sql_str else ''}{'AND'.join(sql_str)} ORDER BY {sql_order[order]} LIMIT 16 OFFSET ?",
             (*sql_parameters, 16*page,)
         ).fetchall()
-    elif page == 0:
+    else:
         rowids, similarities = ast.literal_eval(_ri_s)
+        rowids = rowids[8*page: 8*(page+1)]
+        similarities = similarities[8*page: 8*(page+1)]
         ret = cursor.execute(
-            f"SELECT rowid, pixiv, twitter, yandere, danbooru, gelbooru, zerochan, unique_source, nonunique_source, `from`, source_url, local, title, caption, custom_tags, pixiv_tags, booru_tags, romanized_tags, translated_tags, ML_tags, thumbnail FROM {table_name} WHERE rowid IN ({','.join(['?']*len(rowids))}) LIMIT 512",
+            f"SELECT rowid, pixiv, twitter, yandere, danbooru, gelbooru, zerochan, unique_source, nonunique_source, `from`, source_url, local, title, caption, custom_tags, pixiv_tags, booru_tags, romanized_tags, translated_tags, ML_tags, thumbnail FROM {table_name} WHERE rowid IN ({','.join(['?']*len(rowids))}) LIMIT 8",
             rowids
         ).fetchall()
         return [next(filter(lambda r: r['rowid'] == rowid, ret)) | {'similarity': similarity} for rowid, similarity in zip(rowids, similarities)]
-    else: # _ri_s is not None and page != 0
-        return []
 
 
 @app.get("/tags.json")

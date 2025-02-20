@@ -42,10 +42,15 @@
         const params = new URLSearchParams(location.search);
         document.getElementById("q").value = params.get('q');
         document.getElementById("order").value = params.has('order') ? params.get('order') : 'desc';
+        let end = false;
+        let loading = true;
         let load = function(){
+            loading = true;
             params.set('page', window.page);
             fetch(`api/list?${params.toString()}`).then(
                 res => res.json().then(j => {
+                    if (j.length == 0)
+                        end = true;
                     let grid = document.getElementById('grid');
                     j.forEach(item => {
                         let figure = document.createElement('figure');
@@ -58,13 +63,14 @@
                         img.onclick= e => location.href = 'original?'+item.local;
                         let figcaption = document.createElement('figcaption');
                         figcaption.style.color = 'white';
-                        figcaption.innerHTML = '<p style="text-align:center">' + item.title + '</p>' + item.caption + '<br/>🏷️ ' + item.translated_tags.split(', ').map(tag => `<a href="?q=${tag}">${tag}</a>`).join(', ');
                         if (item.similarity !== undefined && item.similarity !== -1)
-                            figcaption.innerHTML += `<br/><p style="text-align:center">Similarity: ${item.similarity}</p>`
+                            figcaption.innerHTML += `<p style="text-align:center">Similarity: ${item.similarity}</p>`
+                        figcaption.innerHTML += '<p style="text-align:center">' + item.title + '</p>' + item.caption + '<br/>🏷️ ' + item.translated_tags.split(', ').map(tag => `<a href="?q=${tag}">${tag}</a>`).join(', ');
                         figure.append(img);
                         figure.append(figcaption);
                         grid.appendChild(figure);
                     })
+                    loading = false;
                 })
             )
         };
@@ -73,7 +79,7 @@
             var scrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop;
             var clientHeight = window.innerHeight || Math.min(document.documentElement.clientHeight,document.body.clientHeight);
             
-            if (clientHeight + scrollTop > scrollHeight - 50){
+            if (!end && !loading && (clientHeight + scrollTop > scrollHeight - 50)){
                 window.page += 1;
                 load();
             }

@@ -150,11 +150,12 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                     # AI ?
                     description = item['metadata']['core']['user_results']['result']['legacy']['description']
                     location = item['metadata']['core']['user_results']['result']['legacy']['location']
-                    if not ('禁止' in location or '禁止' in description or '無断' in location or '無断' in description or 'NG' in location or 'NG' in description or 'prohibited' in location.casefold() or 'prohibited' in description.casefold()):
+                    AI_exclude_keywords = ('禁止', '無断', 'NG', 'prohibited', 'AI🚫')
+                    if not any(AI_exclude_keyword in location.casefold() or AI_exclude_keyword in description.casefold() for AI_exclude_keyword in AI_exclude_keywords):
                         print(description)
                         description = description.upper()
-                        AI_keywords = ('AI', 'Stable Diffusion', 'Nijijourney', 'Midjourney')
-                        if any(AI_keyword.upper() in description for AI_keyword in AI_keywords):
+                        AI_keywords = ('Stable Diffusion', 'Nijijourney', 'Midjourney')
+                        if re.search(r'(?<![a-zA-Z])AI(?![a-zA-Z])', description, re.ASCII | re.IGNORECASE) or any(AI_keyword.upper() in description for AI_keyword in AI_keywords):
                             metadata['custom_tags'].append('🤖')
 
                     if len(item['media']) > 1: metadata['local'] = item['id'] + '/' + metadata['local']

@@ -36,6 +36,19 @@ def image_verify(img_content):
     # if image.format.lower() == 'jpeg':  # 有些JPG尾部有额外字节，如 https://yande.re/post/show/107805 ，libjxl会确保JPG的正确
     #     if not img_content.rstrip(b'\0\r\n').endswith(b'\xff\xd9'): raise NotImplementedError('未知的JPEG格式')
 
+
+def get_thumb_from_video(video_path: str | Path):
+    import cv2
+    cap = cv2.VideoCapture(str(video_path))
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    frame_number = frame_count // 2
+    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+    ret, frame = cap.read()
+    assert ret
+    ret, thumb_buf = cv2.imencode('.png', frame)
+    assert ret
+    return thumb_buf
+
 @functools.cache
 def cached_pixiv_illust_detail(illust_id):
     from providers.pixiv import Papi

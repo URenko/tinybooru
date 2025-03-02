@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-
+from typing import Callable
 from io import BytesIO
-import time, sqlite3, re, argparse, os, shutil
+import time, sqlite3, re, argparse, os, shutil, tempfile
 from pathlib import Path, PurePath
 from urllib.parse import unquote
 from html import unescape
@@ -17,7 +17,7 @@ from rich.prompt import Confirm, Prompt
 
 from jxl import jxl
 from thumb_gen import update_thumb
-from utils import image_verify, get_metadata, url2source, process_tags
+from utils import image_verify, get_metadata, url2source, process_tags, get_thumb_from_video
 from img_like import ImageHash2int, CLIP_hash, ORB_hash
 
 from config import local_root, sqlite3_path
@@ -112,7 +112,7 @@ def exists(metadata: dict):
         return None
 
 
-def store_image(image: bytes | Path, metadata: dict):
+def store_image(media: bytes | Path | Callable, metadata: dict):
     '''
     calc imagehash
     check existance in the database
@@ -122,7 +122,16 @@ def store_image(image: bytes | Path, metadata: dict):
     upload thumb
     '''
 
-    image_data = image.read_bytes() if isinstance(image, Path) else image
+    if callable(media): # video
+        temp_dir = Path(tempfile.gettempdir()) / 'tmp_tinybooru'
+        temp_dir.mkdir(parents=False, exist_ok=False)
+        temp_video_path = temp_dir / metadata['local']
+        temp_video_path.parent.mkdir(parents=True, exist_ok=True)
+        media(str(temp_video_path))
+        image_data = get_thumb_from_video(temp_video_path)
+    else:
+        media_data = media.read_bytes() if isinstance(media, Path) else media
+        image_data = media_data
 
     image_verify(image_data)
 
@@ -161,15 +170,23 @@ def store_image(image: bytes | Path, metadata: dict):
     
     process_tags(metadata)
 
-    if isinstance(image, Path):
-        fpath = local_root / image.name
-        assert not fpath.exists()
-        metadata['local'] = image.name
-        shutil.move(image, fpath)
-    else:
+    if isinstance(media, bytes):
         fpath = local_root / metadata['local']
         fpath.parent.mkdir(exist_ok=True)
         fpath.write_bytes(image_data)
+    else:
+        if isinstance(media, Path):
+            src = media
+            metadata['local'] = src.name
+        elif callable(media):
+            src = temp_video_path
+        fpath = local_root / metadata['local']
+        assert not fpath.exists()
+        shutil.move(src, fpath)
+
+        if callable(media):
+            shutil.rmtree(temp_dir)
+    
     metadata['local'] = PurePath(metadata['local']).with_name(jxl(fpath).name).as_posix()
     
     display_metadata = dict(metadata)
@@ -180,7 +197,7 @@ def store_image(image: bytes | Path, metadata: dict):
     cursor = db.cursor()
     cursor.execute(f"INSERT INTO pixiv VALUES({', '.join(':'+k for k in metadata.keys())})", metadata)
     
-    update_thumb(cursor.lastrowid, db)
+    update_thumb(cursor.lastrowid, db, image_data=image_data)
     db.commit()
 
 

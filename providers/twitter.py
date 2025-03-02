@@ -105,7 +105,11 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                     assert video_path.suffix == '.mp4'
                     metadata = {
                         "twitter": f"{item['id']}#{index+1}",
+                        "from": item['metadata']['legacy']['extended_entities']['media'][index]['expanded_url'],
+                        "source_url": source_url,
                         'local': video_path.name,
+                        "caption": item['full_text'],
+                        "custom_tags": ["©:"+artist],
                     }
                     if len(item['media']) > 1: metadata['local'] = item['id'] + '/' + metadata['local']
                     if exists(metadata):

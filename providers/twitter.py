@@ -201,7 +201,7 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                             print('未対応の形式のファイルです')
                             time.sleep(100)
                         soup = BeautifulSoup(_r.text, 'html.parser')
-                        item_boxes = soup.find_all("div", class_="item-box")
+                        item_boxes = [_i for _i in soup.find_all("div", class_="item-box") if '広告' not in _i.get_text()]
                         assert len(item_boxes) > 0, _r.text
                         assert item_boxes[0].div.img['loading'] == 'eager', item_boxes[0]
                         search_results = []
@@ -250,7 +250,7 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                         _r = scraper.get(next_ascii2d_url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; rv:125.0) Gecko/20100101 Firefox/125.0'})
                         _r.raise_for_status()
                         soup = BeautifulSoup(_r.text, 'html.parser')
-                        item_boxes = soup.find_all("div", class_="item-box")
+                        item_boxes = [_i for _i in soup.find_all("div", class_="item-box") if '広告' not in _i.get_text()]
                         assert item_boxes[0].div.img['loading'] == 'eager'
                         search_results = []
                         search_identities = []

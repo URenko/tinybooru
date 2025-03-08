@@ -91,7 +91,7 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
         checkpoint = set()
     
     try:
-        for item in reversed(json.loads(json_path.read_bytes())):
+        for item in json.loads(json_path.read_bytes()):
             if break_flag: break
             source = 'https://twitter.com/i/status/' + item['id']
             print('\n--->', source)

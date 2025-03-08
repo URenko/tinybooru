@@ -255,8 +255,12 @@ def process_tags(metadata: dict[str, list[str]]):
             metadata['translated_tags'].append(translated_tag)
         else:
             metadata['translated_tags'].append(tag)
-    metadata['romanized_tags'] += metadata['booru_tags']
-    for tag in metadata['booru_tags']:
+    if metadata['booru_tags']:
+        booru_tags = metadata['booru_tags']
+    else:
+        booru_tags = metadata['ML_tags']
+    metadata['romanized_tags'] += booru_tags
+    for tag in booru_tags:
         if (detail := booru_tag_detail(tag)):
             other_names = detail[0]['other_names']
             if other_names:
@@ -272,6 +276,8 @@ def process_tags(metadata: dict[str, list[str]]):
     metadata['custom_tags'] = ', '.join(metadata['custom_tags'])
     metadata['pixiv_tags'] = ', '.join(metadata['pixiv_tags'])
     metadata['booru_tags'] = ', '.join(metadata['booru_tags'])
+    if metadata['ML_tags'] is not None:
+        metadata['ML_tags'] = ', '.join(metadata['ML_tags'])
     metadata['romanized_tags'] = ', '.join(metadata['romanized_tags'])
     metadata['translated_tags'] = ', '.join(metadata['translated_tags'])
 

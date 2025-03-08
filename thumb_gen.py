@@ -23,26 +23,17 @@ from config import local_root
 local_root = local_root / 'pixiv'
 
 
-def update_thumb(rowid: str, db: sqlite3.Connection, image_data=None, image_suffix='.png', target_size=5*2**20):
-    print(rowid)
-    local, = db.execute('SELECT local FROM pixiv WHERE rowid = ?', (rowid,)).fetchone()
-
-    tinybooru_image = TinyBooruImage({'local': local})
-    if image_data is not None:
-        tinybooru_image.image_data = image_data
-        tinybooru_image.image_suffix = image_suffix
-    
-    with tinybooru_image.thumb() as (thumb_buffer, filename):
-        # r = s.post("https://p.sda1.dev/api_dup2/v1/upload_external_noform?filename="+quote_plus(filename), data=thumb_file)
-        r = s.post(
-            "https://member.bilibili.com/x/vu/web/cover/up",
-            data={
-                'csrf': os.environ['csrf'],
-                'cover': b'data:' + mimetypes.guess_type(filename, strict=False)[0].encode('UTF-8') + b';base64,' + base64.b64encode(thumb_buffer.getvalue()),
-            },
-            cookies={'SESSDATA': os.environ['SESSDATA']}
-        )
-        # https://github.com/SocialSisterYi/bilibili-API-collect/pull/1066/files#diff-36446fff007e20642f1fe9dd135046f63817bfa63a6589426821a9f421b558f5
+def update_thumb(rowid: str, db: sqlite3.Connection, thumb_buffer, filename):
+    # r = s.post("https://p.sda1.dev/api_dup2/v1/upload_external_noform?filename="+quote_plus(filename), data=thumb_file)
+    r = s.post(
+        "https://member.bilibili.com/x/vu/web/cover/up",
+        data={
+            'csrf': os.environ['csrf'],
+            'cover': b'data:' + mimetypes.guess_type(filename, strict=False)[0].encode('UTF-8') + b';base64,' + base64.b64encode(thumb_buffer.getvalue()),
+        },
+        cookies={'SESSDATA': os.environ['SESSDATA']}
+    )
+    # https://github.com/SocialSisterYi/bilibili-API-collect/pull/1066/files#diff-36446fff007e20642f1fe9dd135046f63817bfa63a6589426821a9f421b558f5
 
     if r.status_code != http.HTTPStatus.OK:
         print(r.text)

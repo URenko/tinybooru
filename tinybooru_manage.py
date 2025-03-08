@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
 from typing import Callable
-from io import BytesIO
-import time, sqlite3, re, argparse, os, shutil, tempfile
+import time, sqlite3, re, argparse, os, tempfile, shutil
 from pathlib import Path, PurePath
 from urllib.parse import unquote
-from html import unescape
-from collections import OrderedDict
-from PIL import Image, UnidentifiedImageError
-from imagehash import average_hash, phash, dhash, whash
 
 from rich.traceback import install
 install()
@@ -15,11 +10,9 @@ from rich import print
 pprint = print
 from rich.prompt import Confirm, Prompt
 
-from jxl import jxl
 from thumb_gen import update_thumb
-from utils import image_verify, get_metadata, url2source, process_tags, get_thumb_from_video
-from img_like import ImageHash2int, CLIP_hash, ORB_hash
-
+from utils import image_verify, get_metadata, url2source
+from tinybooru_image import TinyBooruImage
 from config import local_root, sqlite3_path
 local_root = local_root / 'pixiv'
 db = sqlite3.connect(sqlite3_path)
@@ -113,91 +106,43 @@ def exists(metadata: dict):
 
 
 def store_image(media: bytes | Path | Callable, metadata: dict):
-    '''
-    calc imagehash
-    check existance in the database
-    combine and translate tags
-    save images
-    save metadata
-    upload thumb
-    '''
-
-    if callable(media): # video
-        temp_dir = Path(tempfile.gettempdir()) / 'tmp_tinybooru'
-        temp_dir.mkdir(parents=False, exist_ok=False)
-        temp_video_path = temp_dir / metadata['local']
-        temp_video_path.parent.mkdir(parents=True, exist_ok=True)
-        media(str(temp_video_path))
-        image_data = get_thumb_from_video(temp_video_path)
-    else:
-        media_data = media.read_bytes() if isinstance(media, Path) else media
-        image_data = media_data
-
-    image_verify(image_data)
-
-    with Image.open(BytesIO(image_data)) as img:
-        metadata = OrderedDict({
-            'pixiv': None,
-            'twitter': None,
-            'yandere': None,
-            'danbooru': None,
-            'gelbooru': None,
-            'zerochan': None,
-            'unique_source': None,
-            'nonunique_source': None,
-            'from': None,
-            'source_url': None,
-            'local': None,
-            'title': None,
-            'caption': None,
-            'custom_tags': [],
-            'pixiv_tags': [],
-            'booru_tags': [],
-            'romanized_tags': [],
-            'translated_tags': [],
-            'ML_tags': None,
-            'thumbnail': None,
-            'aHash': ImageHash2int(average_hash(img)),
-            'pHash': ImageHash2int(phash(img)),
-            'dHash': ImageHash2int(dhash(img)),
-            'wHash': ImageHash2int(whash(img)),
-            'CLIP_hash': CLIP_hash(img).tobytes(),
-            'ORB_hash': ORB_hash(img).tobytes()
-        }) | metadata
 
     if (row := exists(metadata)) is not None:
         raise FileExistsError(f"已存在！\n{row}")
     
-    process_tags(metadata)
+    if 'local' not in metadata and isinstance(media, PurePath):
+        metadata['local'] = media.name
+    
+    tinybooru_image = TinyBooruImage(metadata)
 
-    if isinstance(media, bytes):
-        fpath = local_root / metadata['local']
-        fpath.parent.mkdir(exist_ok=True)
-        fpath.write_bytes(image_data)
+    if callable(media):
+        temp_dir = Path(tempfile.gettempdir()) / 'tmp_tinybooru'
+        temp_dir.mkdir(parents=False, exist_ok=False)
+        tmp_video_path = temp_dir / metadata['local']
+        tmp_video_path.parent.mkdir(parents=True, exist_ok=True)
+        media(str(tmp_video_path))
+        tinybooru_image.fetch_media(tmp_video_path)
     else:
-        if isinstance(media, Path):
-            src = media
-            metadata['local'] = src.name
-        elif callable(media):
-            src = temp_video_path
-        fpath = local_root / metadata['local']
-        assert not fpath.exists()
-        shutil.move(src, fpath)
+        tinybooru_image.fetch_media(media)
+    
+    tinybooru_image.calc_hash()
 
+    with tinybooru_image.thumb(target_size=5*2**20) as (thumb_buffer, thumb_filename):
+        tinybooru_image.process_tags(thumb_buffer)
+
+        tinybooru_image.save_file()
         if callable(media):
             shutil.rmtree(temp_dir)
     
-    metadata['local'] = PurePath(metadata['local']).with_name(jxl(fpath).name).as_posix()
-    
-    display_metadata = dict(metadata)
-    del display_metadata['CLIP_hash']
-    del display_metadata['ORB_hash']
-    pprint(display_metadata)
+        display_metadata = dict(tinybooru_image.metadata)
+        del display_metadata['CLIP_hash']
+        del display_metadata['ORB_hash']
+        pprint(display_metadata)
 
-    cursor = db.cursor()
-    cursor.execute(f"INSERT INTO pixiv VALUES({', '.join(':'+k for k in metadata.keys())})", metadata)
-    
-    update_thumb(cursor.lastrowid, db, image_data=image_data)
+        cursor = db.cursor()
+        cursor.execute(f"INSERT INTO pixiv VALUES({', '.join(':'+k for k in tinybooru_image.metadata.keys())})", tinybooru_image.metadata)
+        
+        update_thumb(cursor.lastrowid, db, thumb_buffer, thumb_filename)
     db.commit()
 
 

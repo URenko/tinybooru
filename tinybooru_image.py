@@ -1,6 +1,5 @@
-import functools, io, mimetypes, tempfile, subprocess, shutil
+import functools, io, mimetypes, tempfile, subprocess, shutil, json
 mimetypes.add_type('image/jxl', '.jxl')
-from typing import Callable
 from collections import OrderedDict
 from pathlib import PurePosixPath, Path, PurePath
 
@@ -14,7 +13,7 @@ s.mount('http://', HTTPAdapter(max_retries=Retry(backoff_factor=1)))
 s.mount('https://', HTTPAdapter(max_retries=Retry(backoff_factor=1)))
 from jxl import jxl
 from img_like import ImageHash2int, CLIP_hash, ORB_hash
-from utils import process_tags, get_thumb_from_video
+from utils import process_tags, get_thumb_from_video, long_rating_tag_to_short
 from config import local_root
 local_root = local_root / 'pixiv'
 
@@ -95,8 +94,10 @@ class TinyBooruImage:
                 len(self.image_data)
             )
         
-        if not self.mime.startswith('image/'):
-            raise NotImplementedError
+        if self.mime.startswith('video/'):
+            self.image_data = get_thumb_from_video(self.path)
+            self.image_name = PurePath(self.metadata['local']).with_suffix('.png').name
+            return self.image_fp(normal=normal)
         
         if normal and self.path.suffix.lower() == '.jxl':
             _jpg_tmp_file = tempfile.NamedTemporaryFile(suffix='.jpg')
@@ -128,9 +129,7 @@ class TinyBooruImage:
         finally:
             fp.close()
 
-    @functools.lru_cache
     def thumb(self, target_size=5*2**20):
-        '''The returned Thumb is cached, thus it can only be called once.'''
         class Thumb:
             def __init__(self, tinybooru_image: TinyBooruImage):
                 self.tinybooru_image = tinybooru_image
@@ -151,10 +150,10 @@ class TinyBooruImage:
                             reduce_factor += 1
                             im_tmp = im.reduce(reduce_factor) if reduce_factor != 1 else im
                             thumb_buffer = io.BytesIO()
-                            im_tmp.save(thumb_buffer, 'JPEG', optimize=True)#'WEBP', method=6)
+                            im_tmp.save(thumb_buffer, 'WEBP', method=6)
                             thumb_size = len(thumb_buffer.getvalue())
                             print(f"{origin_size/2**10:.1f} KB reduced {reduce_factor} times to {thumb_size/2**10:.1f} KB")
-                        filename = str(Path(origin_name).with_suffix('.jpg'))
+                        filename = str(Path(origin_name).with_suffix('.webp'))
                 thumb_buffer.seek(0)
                 return (thumb_buffer, filename)
             
@@ -163,16 +162,51 @@ class TinyBooruImage:
         
         return Thumb(self)
     
-    def process_tags(self, thumb_buffer):
-        '''self.thumb is not used inside. Because it is cached and can only be called once and user should manage Thumb manually.'''
-        if not self.metadata['booru_tags']:
+    def process_tags(self, thumb_buffer, skip_ML_if_booru_exists=True):
+        '''self.thumb is not used inside. Users should manage Thumb manually.'''
+        if not skip_ML_if_booru_exists or not self.metadata['booru_tags']:
+            ## autotagger
+            # r = s.post(
+            #     'https://autotagger.donmai.us/evaluate',
+            #     files={
+            #         'file': thumb_buffer,
+            #     },
+            #     data={'format': 'json'},
+            # )
+            # r.raise_for_status()
+            # rating = next(t for t in r.json()[0]['tags'] if t.startswith('rating:'))
+            # self.metadata['custom_tags'].append(long_rating_tag_to_short(rating))
+            # self.metadata['ML_tags'] = [t for t,p in r.json()[0]['tags'].items() if p > 0.5 and not t.startswith('rating:')]
+            
+            # DeepDanbooru
             r = s.post(
-                'https://autotagger.donmai.us/evaluate',
+                "https://hysts-deepdanbooru.hf.space/gradio_api/upload",
                 files={
-                    'file': thumb_buffer,
+                    'files': thumb_buffer,
+                }
+            )
+            j = r.json()
+            r.raise_for_status()
+            r = s.post(
+                "https://hysts-deepdanbooru.hf.space/gradio_api/call/predict",
+                json={
+                    "data": [
+                        {"path": j[0]},
+                        0
+                    ]
                 },
-                data={'format': 'json'},
+                headers={"Content-Type": "application/json"},
             )
             r.raise_for_status()
-            self.metadata['ML_tags'] = [t for t,p in r.json()[0]['tags'].items() if p > 0.5]
+            r = s.get(
+                f"https://hysts-deepdanbooru.hf.space/gradio_api/call/predict/{r.json()['event_id']}",
+                headers={"Content-Type": "application/json"},
+            )
+            r.raise_for_status()
+            j = json.loads(r.text.removeprefix('event: complete\ndata: '))
+            rating = next(t for t in j[1] if t.startswith('rating:'))
+            self.metadata['custom_tags'].append(long_rating_tag_to_short(rating))
+            print(f"custom_tags: {self.metadata['custom_tags']}")
+            self.metadata['ML_tags'] = [item['label'] for item in j[0]['confidences'] if item['confidence'] > 0.5 and not item['label'].startswith('rating:')]
+            print(f"ML_tags: {self.metadata['ML_tags']}")
         process_tags(self.metadata)

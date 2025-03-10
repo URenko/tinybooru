@@ -20,6 +20,7 @@
             <option value="asc" selected>Old → New</option>
         </select>
         <input type="text" name="q" id="q" class="awesomplete" />
+        <input type="checkbox" name="unsafe" id="unsafe" value="1" /><label>🔞</label>
         <input type="submit" hidden />
     </form>
     <form action="" method="post" enctype="multipart/form-data">
@@ -41,6 +42,8 @@
         window.page = 0;
         const params = new URLSearchParams(location.search);
         document.getElementById("q").value = params.get('q');
+        if (params.get('unsafe') === "1")
+            document.getElementById("unsafe").checked = true;
         document.getElementById("order").value = params.has('order') ? params.get('order') : 'desc';
         let end = false;
         let loading = true;

@@ -49,6 +49,20 @@ def get_thumb_from_video(video_path: str | Path):
     assert ret
     return thumb_buf
 
+
+def long_rating_tag_to_short(tag: str):
+    try:
+        return {
+            'rating:general': 'rating:g',
+            'rating:safe': 'rating:g',
+            'rating:questionable': 'rating:q',
+            'rating:explicit': 'rating:e',
+        }[tag]
+    except KeyError:
+        print(f'Unknowing long rating tag: {tag}')
+        raise
+
+
 @functools.cache
 def cached_pixiv_illust_detail(illust_id):
     from providers.pixiv import Papi
@@ -87,6 +101,7 @@ def get_pixiv_metadata(pixiv_id: str):
 def get_yandere_metadata(id: str):
     j = s.get(f"https://yande.re/post.json?tags=id:{id}").json()[0]
     ret =  {
+        'custom_tags': [f"rating:{j['rating']}"],
         'booru_tags': list(j['tags'].split(' ')),
         'source_url': j.get('file_url'),
     }
@@ -101,6 +116,7 @@ def get_yandere_metadata(id: str):
 def get_danbooru_metadata(id: str):
     j = s.get(f"https://danbooru.donmai.us/posts/{id}.json").json()  # , headers={"User-Agent": 'curl/7.74.0'}  https://github.com/mikf/gallery-dl/issues/3665
     ret = {
+        'custom_tags': [f"rating:{j['rating']}"],
         'booru_tags': list(j['tag_string'].split(' ')),
         'source_url': j.get('file_url') # https://danbooru.donmai.us/wiki_pages/help%3Ausers , 例: https://danbooru.donmai.us/posts/7245496
     }
@@ -117,6 +133,7 @@ def get_gelbooru_metadata(id: str):
     assert 'post' in j, f"gelbooru:{id} 无 post 字段" # 例子: gelbooru:5412709 被删除, gelbooru:7657521 重定向到首页, https://pbs.twimg.com/media/FbjxCGwaAAA2y1C?format=jpg&name=orig 之 SauceNAO 结果
     j = j['post'][0]
     ret = {
+        'custom_tags': [long_rating_tag_to_short(f"rating:{j['rating']}")],
         'booru_tags': list(j['tags'].split(' ')),
         'source_url': j['file_url']
     }

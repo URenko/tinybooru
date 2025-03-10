@@ -213,7 +213,7 @@ def post_root(file: UploadFile, url: str | None = Form(default=None), method: Se
     return RedirectResponse(f"?_ri_s={found_rowids}", status_code=303)
 
 @app.get("/api/list")
-def search(page: int = 0, q: str = '', order: Order = Order.desc, _ri_s: str | None = None, db: sqlite3.Connection = Depends(get_db)):
+def search(page: int = 0, q: str = '', order: Order = Order.desc, _ri_s: str | None = None, unsafe: int = 0, db: sqlite3.Connection = Depends(get_db)):
     cursor = db.cursor()
     cursor.row_factory = dict_factory
     if _ri_s is None:
@@ -227,8 +227,10 @@ def search(page: int = 0, q: str = '', order: Order = Order.desc, _ri_s: str | N
         for f in filter(None, map(str.strip, q.split(','))):
             sql_str.append('(translated_tags LIKE ? OR title LIKE ? OR caption LIKE ?)')
             sql_parameters += [f"%{f}%", f"%{f}%", f"%{f}%"]
+        if not unsafe:
+            sql_str.append(r'(custom_tags LIKE "%🔞:2%" OR custom_tags LIKE "%rating:g%")')
         return cursor.execute(
-            f"SELECT rowid, pixiv, twitter, yandere, danbooru, gelbooru, zerochan, unique_source, nonunique_source, `from`, source_url, local, title, caption, custom_tags, pixiv_tags, booru_tags, romanized_tags, translated_tags, ML_tags, thumbnail FROM {table_name} {'WHERE ' if sql_str else ''}{'AND'.join(sql_str)} ORDER BY {sql_order[order]} LIMIT 16 OFFSET ?",
+            f"SELECT rowid, pixiv, twitter, yandere, danbooru, gelbooru, zerochan, unique_source, nonunique_source, `from`, source_url, local, title, caption, custom_tags, pixiv_tags, booru_tags, romanized_tags, translated_tags, ML_tags, thumbnail FROM {table_name} {'WHERE ' if sql_str else ''}{' AND '.join(sql_str)} ORDER BY {sql_order[order]} LIMIT 16 OFFSET ?",
             (*sql_parameters, 16*page,)
         ).fetchall()
     else:

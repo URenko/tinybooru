@@ -75,7 +75,9 @@ def process_search_results(
     # 反向优先级解析以覆盖 normal_tags
     for site in ('gelbooru', 'danbooru', 'yandere'):
         if (search_result := next(filter(lambda search_result: site in search_result.site_and_ids, search_identities), None)) is not None:
-            metadata['booru_tags'] = get_metadata(site, search_result.site_and_ids[site], coarse=True)['booru_tags']
+            _site_metadata = get_metadata(site, search_result.site_and_ids[site], coarse=True)
+            metadata['booru_tags'] = _site_metadata['booru_tags']
+            metadata['custom_tags'] += _site_metadata['custom_tags']
             metadata[site] = search_result.site_and_ids[site]
     return True
 

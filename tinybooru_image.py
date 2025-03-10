@@ -129,7 +129,7 @@ class TinyBooruImage:
         finally:
             fp.close()
 
-    def thumb(self, target_size=5*2**20):
+    def thumb(self, target_size=5*2**20, format='JPEG'):
         class Thumb:
             def __init__(self, tinybooru_image: TinyBooruImage):
                 self.tinybooru_image = tinybooru_image
@@ -150,10 +150,10 @@ class TinyBooruImage:
                             reduce_factor += 1
                             im_tmp = im.reduce(reduce_factor) if reduce_factor != 1 else im
                             thumb_buffer = io.BytesIO()
-                            im_tmp.save(thumb_buffer, 'WEBP', method=6)
+                            im_tmp.save(thumb_buffer, format, **({'WEBP': {'method': 6}, 'JPEG': {'optimize': True}}[format]))
                             thumb_size = len(thumb_buffer.getvalue())
                             print(f"{origin_size/2**10:.1f} KB reduced {reduce_factor} times to {thumb_size/2**10:.1f} KB")
-                        filename = str(Path(origin_name).with_suffix('.webp'))
+                        filename = str(Path(origin_name).with_suffix({'WEBP': '.webp', 'JPEG': '.jpg'}[format]))
                 thumb_buffer.seek(0)
                 return (thumb_buffer, filename)
             

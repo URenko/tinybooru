@@ -57,6 +57,7 @@ def long_rating_tag_to_short(tag: str):
             'rating:safe': 'rating:g',
             'rating:questionable': 'rating:q',
             'rating:explicit': 'rating:e',
+            'rating:sensitive': 'rating:s',
         }[tag]
     except KeyError:
         print(f'Unknowing long rating tag: {tag}')

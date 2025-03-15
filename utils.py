@@ -131,7 +131,10 @@ def get_danbooru_metadata(id: str):
 @functools.cache
 def get_gelbooru_metadata(id: str):
     j = s.get(f"https://gelbooru.com/index.php?page=dapi&s=post&q=index&json=1&id={id}").json()  # , headers={"User-Agent": 'curl/7.74.0'}
-    assert 'post' in j, f"gelbooru:{id} 无 post 字段" # 例子: gelbooru:5412709 被删除, gelbooru:7657521 重定向到首页, https://pbs.twimg.com/media/FbjxCGwaAAA2y1C?format=jpg&name=orig 之 SauceNAO 结果
+    if 'post' not in j:
+        print(f"gelbooru:{id} 无 post 字段") # 例子: gelbooru:5412709 被删除, gelbooru:7657521 重定向到首页, https://pbs.twimg.com/media/FbjxCGwaAAA2y1C?format=jpg&name=orig 之 SauceNAO 结果
+        assert j['@attributes']['count'] == 0
+        return {}
     j = j['post'][0]
     ret = {
         'custom_tags': [long_rating_tag_to_short(f"rating:{j['rating']}")],

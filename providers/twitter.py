@@ -362,8 +362,11 @@ def twitter_generator(json_path: Path, exists: Callable[[dict], bool], search: b
                 f.write(json_path.read_bytes())
             json_path.unlink()
         break_flag = True # 正常结束，跳过下面的保存询问
+    except:
+        console.print_exception(show_locals=False)
+        raise
     finally:
-        if break_flag or Confirm.ask("保存 checkpoint?"):
+        if break_flag or Confirm.ask("保存 checkpoint？（失误判断时不保存）"):
             with open(checkpoint_path, 'wb') as f:
                 pickle.dump(checkpoint, f, protocol=5)
                 fcntl.lockf(f, fcntl.LOCK_UN)

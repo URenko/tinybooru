@@ -1,4 +1,14 @@
-- 配置: `config.py` 暴露 `local_root: Path`, `sqlite3_path: str`, `ffmpeg: str`
+- 配置: 环境变量（当安装了 dotenv 后可通过 .env 文件配置）：
+```
+local_root
+sqlite3_path
+ffmpeg_path
+ascii2d_prefix
+ascii2d_host
+saucenao_apikey
+csrf
+SESSDATA
+```
 - 添加媒体: `tinybooru_manage.py`, `rawbooru_manage.py`
 - 启动服务器: `fastapi run tinybooru.py`
 

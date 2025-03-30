@@ -1,5 +1,5 @@
 refresh_token.txt
-config.py
+.env
 sqlite3_cli.py
 *.jpg
 *.png

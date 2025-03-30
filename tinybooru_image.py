@@ -57,6 +57,9 @@ class TinyBooruImage:
         elif isinstance(media, bytes):
             self.image_data = media
             self.image_name = PurePath(self.metadata['local']).name
+        elif isinstance(media, Path): # the `media` path is unstable, read it ASAP
+            self.image_data = media.read_bytes()
+            self.image_name = media.name
         
         fp, _, _ = self.image_fp()
         try:
@@ -68,11 +71,12 @@ class TinyBooruImage:
     def save_file(self):
         fpath = local_root / self.metadata['local']
         fpath.parent.mkdir(exist_ok=True)
+        
+        assert not fpath.exists()
 
         if isinstance(self.media, bytes):
             fpath.write_bytes(self.media)
         elif isinstance(self.media, PurePath):
-            assert not fpath.exists()
             shutil.move(self.media, fpath)
 
         self.metadata['local'] = PurePath(self.metadata['local']).with_name(jxl(fpath).name).as_posix()

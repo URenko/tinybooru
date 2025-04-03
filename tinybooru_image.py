@@ -142,14 +142,16 @@ class TinyBooruImage:
                 origin_image, origin_name, origin_size = self.tinybooru_image.image_fp(normal=True)
                 self.origin_image = origin_image
                 with Image.open(origin_image) as im:
-                    if origin_size < target_size:
+                    if origin_size < target_size and getattr(im, 'n_frames', 1) <= 1:
                         thumb_buffer = origin_image
                         filename = origin_name
                     else:
+                        reduce_factor = 0
+                        thumb_size = 2**99 # force start
+                        if im.n_frames > 1:
+                            im.seek(im.n_frames // 2)
                         if im.mode == 'RGBA':  # cannot write mode RGBA as JPEG
                             im = im.convert('RGB')
-                        reduce_factor = 0
-                        thumb_size = target_size # force startj
                         while thumb_size >= target_size:
                             reduce_factor += 1
                             im_tmp = im.reduce(reduce_factor) if reduce_factor != 1 else im

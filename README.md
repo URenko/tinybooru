@@ -6,8 +6,7 @@ ffmpeg_path
 ascii2d_prefix
 ascii2d_host
 saucenao_apikey
-csrf
-SESSDATA
+bili_cookies
 ```
 - 添加媒体: `tinybooru_manage.py`, `rawbooru_manage.py`
 - 启动服务器: `fastapi run tinybooru.py`

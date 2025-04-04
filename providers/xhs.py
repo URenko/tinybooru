@@ -34,7 +34,7 @@ def xhs_generator(link_path: str, exists: Callable[[dict], bool]):
     else:
         multiple_links = Path(link_path).read_text()
     ret = asyncio.run(async_xhs_generator(multiple_links))
-    if ret[-1] == {}: ret = ret[:-2] # incompleted link at the end
+    if ret[-1] == {}: ret = ret[:-1] # incompleted link at the end
     for item in ret:
         try:
             artist = f"{item['作者昵称']}${item['作者ID']}"
@@ -43,14 +43,14 @@ def xhs_generator(link_path: str, exists: Callable[[dict], bool]):
                 'from': item['作品链接'],
                 'title': item['作品标题'],
                 'caption': item['作品描述'],
-                'source_url': item['下载地址'],
+                'source_url': item['下载地址'] + [a for a in item['动图地址'] if a is not None],
                 'custom_tags': "©:"+artist,
                 'xhs_tags': ', '.join(item['作品标签'].split(' ')),
                 'raw_detail': item,
             }
             pprint(metadata)
             yield json.dumps(metadata, ensure_ascii=False, indent='\t').encode('UTF-8'), metadata | {'local': 'XHS/' + item['作品ID'] + '/metadata.json'}
-            for download_url in item['下载地址']:
+            for download_url in metadata['source_url']:
                 download_url_parsed = urllib.parse.urlparse(download_url)
                 if download_url_parsed.hostname == 'sns-video-bd.xhscdn.com':
                     suffix = '.mov'
